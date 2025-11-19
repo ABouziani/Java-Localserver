@@ -77,23 +77,49 @@ public class NioHttpServer {
         buffer.flip();
         String request = new String(buffer.array(), 0, buffer.limit());
 
+        String[] parts = request.split("\r\n\r\n", 2);
+        String headers = parts[0];
+        String postBody = parts.length > 1 ? parts[1] : "";
+
+        int contentLength = 0;
+        for (String line : headers.split("\r\n")) {
+            if (line.toLowerCase().startsWith("content-length")) {
+                contentLength = Integer.parseInt(line.split(":")[1].trim());
+            }
+        }
+
+        while (postBody.length() < contentLength) {
+            ByteBuffer temp = ByteBuffer.allocate(1024);
+            int readMore = client.read(temp);
+
+            if (readMore == -1) {
+                break;
+            }
+
+            temp.flip();
+            postBody += new String(temp.array(), 0, readMore);
+        }
+
+        System.out.println("Post body: \n" + postBody);
+
         String[] lines = request.split("\r\n");
         String[] firstLine = lines[0].split(" ");
 
-        String method = firstLine[0]; 
-        String path = firstLine[1]; 
+        String method = firstLine[0];
+        String path = firstLine[1];
         System.out.println("Received request:\n" + request);
 
-        String body;
-        if (method.equals("GET") && path.equals("/hello")) {
-            body = "{\'msg\': \'hello world\'}";
-        } else if (method.equals("POST") && path.equals("/login")) {
-            body = "{\"status\": \"logged\"}";
-        } else {
-            body = "{\"error\": \"not found\"}";
-        }
-
-        String response = buildResponse(body);
+        // String body;
+        // if (method.equals("GET") && path.equals("/hello")) {
+        //     body = "{\'msg\': \'hello world\'}";
+        // } else if (method.equals("POST") && path.equals("/login")) {
+        //     body = "{\"status\": \"logged\"}";
+        // } else {
+        //     body = "{\"error\": \"not found\"}";
+        // }
+        // String response = buildResponse(body);
+        String json = "{\"received\": " + postBody + "}";
+        String response = buildResponse(json);
 
         ByteBuffer responseBuffer = ByteBuffer.wrap(response.getBytes());
         client.write(responseBuffer);
