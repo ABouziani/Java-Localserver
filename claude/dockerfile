@@ -1,0 +1,16 @@
+# Use a maintained OpenJDK 21 image
+FROM mcr.microsoft.com/openjdk/jdk:21-ubuntu
+
+# Set working directory inside container
+WORKDIR /app
+
+# Copy your Java file
+COPY NioHttpServer.java .
+
+# Compile the Java file
+RUN javac NioHttpServer.java
+
+# Run the server
+CMD ["java", "NioHttpServer"]
+
+
