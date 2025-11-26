@@ -1,5 +1,11 @@
 package routing;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 public class Route {
     public Set<String> methods = new HashSet<>();
     public String root = null;
@@ -8,7 +14,7 @@ public class Route {
     public Map<String,String> cgi = new HashMap<>();
     public String redirect = null;
 
-    static Route fromMap(Map<String,Object> m) {
+    public static Route fromMap(Map<String,Object> m) {
         Route r = new Route();
         if (m.containsKey("methods")) {
             ArrayList<Object> a = (ArrayList<Object>) m.get("methods");

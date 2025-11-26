@@ -1,14 +1,27 @@
 package cgi;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import configurations.Config;
+import http.HTTPRequest;
+import http.HTTPResponse;
+
 public class CGIHandler {
 
     private final Config cfg;
 
-    CGIHandler(Config cfg) {
+    public CGIHandler(Config cfg) {
         this.cfg = cfg;
     }
 
-    HTTPResponse execute(HTTPRequest req, File file) throws IOException {
+    public HTTPResponse execute(HTTPRequest req, File file) throws IOException {
         // Only allowing .py as configured example
         String ext = file.getName().contains(".") ? file.getName().substring(file.getName().lastIndexOf('.') + 1) : "";
         String interpreter = "python3"; // default; can be configurable

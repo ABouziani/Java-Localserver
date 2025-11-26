@@ -1,12 +1,15 @@
 package session;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class Session {
 
     String id;
-    long lastAccessed = System.currentTimeMillis();
+    public long lastAccessed = System.currentTimeMillis();
     Map<String, String> data = new HashMap<>();
 
-    Session(String id) {
+    public Session(String id) {
         this.id = id;
     }
 }

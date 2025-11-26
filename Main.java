@@ -1,15 +1,6 @@
-import java.io.*;
-import java.io.ObjectInputFilter.Config;
-import java.net.*;
-import java.nio.*;
-import java.nio.channels.*;
-import java.nio.charset.*;
-import java.nio.file.*;
-import java.time.*;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.regex.Pattern;
+import configurations.Config;
+import configurations.ConfigLoader;
+import server.Server;
 
 
 public class Main {
