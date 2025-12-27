@@ -7,7 +7,7 @@ public class HTTPRequest {
 
     public String method;
     public String path;
-    String version;
+    public String version;
     public Map<String, String> headers = new HashMap<>();
     public String body;
     public boolean valid = false;

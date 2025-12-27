@@ -6,78 +6,130 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class HTTPParser {
-    // returns null if incomplete. If complete, returns HTTPRequest with remain
-    // string (unparsed tail)
+
+    public static long CLIENT_MAX_BODY = 10485760;
+
     public static HTTPRequest tryParse(String raw) {
+
         int headersEnd = raw.indexOf("\r\n\r\n");
-        if (headersEnd == -1)
+        if (headersEnd == -1) {
             return null;
-        String head = raw.substring(0, headersEnd + 4);
-        String[] lines = head.split("\r\n");
-        String[] start = lines[0].split(" ", 3);
-        if (start.length < 3)
+        }
+
+        String headersSection = raw.substring(0, headersEnd);
+        String[] lines = headersSection.split("\r\n");
+
+        if (lines.length == 0) {
             return HTTPRequest.invalid();
-        String method = start[0];
-        String path = start[1];
-        String ver = start[2];
+        }
+
+        String requestLine = lines[0];
+        String[] parts = requestLine.split(" ");
+
+        if (parts.length != 3) {
+            return HTTPRequest.invalid();
+        }
+
+        String method = parts[0].toUpperCase();
+        String rawPath = parts[1];
+        String version = parts[2];
+
+        if (!version.startsWith("HTTP/1.1")) {
+            return HTTPRequest.invalid();
+        }
+
+        if (!method.equals("GET") &&
+                !method.equals("POST") &&
+                !method.equals("DELETE")) {
+            return HTTPRequest.invalid();
+        }
+
         Map<String, String> headers = new HashMap<>();
+
         for (int i = 1; i < lines.length; i++) {
-            String line = lines[i];
+            String line = lines[i].trim();
             if (line.isEmpty())
                 continue;
-            int idx = line.indexOf(':');
-            if (idx == -1)
-                continue;
-            String k = line.substring(0, idx);
-            String v = line.substring(idx + 1).trim();
-            headers.put(k, v);
-        }
-        int contentLength = headers.containsKey("Content-Length") ? Integer.parseInt(headers.get("Content-Length"))
-                : -1;
-        boolean chunked = "chunked".equalsIgnoreCase(headers.getOrDefault("Transfer-Encoding", ""));
-        int totalLen = headersEnd + 4;
-        String body = null;
-        String remain = raw.substring(totalLen);
-        if (chunked) {
-            // need to parse chunks: look for terminating 0\r\n\r\n
-            int term = raw.indexOf("\r\n0\r\n\r\n", totalLen - 0);
-            if (term == -1)
-                return null;
-            String chunkPart = raw.substring(totalLen, term + 5);
-            body = decodeChunks(chunkPart);
-            remain = raw.substring(term + 7);
-        } else if (contentLength >= 0) {
-            if (remain.length() < contentLength)
-                return null;
-            body = remain.substring(0, contentLength);
-            remain = remain.substring(contentLength);
-        }
-        HTTPRequest req = new HTTPRequest();
-        req.method = method;
-        req.path = URLDecoder.decode(path, StandardCharsets.UTF_8);
-        req.version = ver;
-        req.headers = headers;
-        req.body = body;
-        req.valid = true;
-        req.remain = remain;
-        return req;
-    }
 
-    static String decodeChunks(String s) {
-        StringBuilder out = new StringBuilder();
-        int i = 0;
-        while (i < s.length()) {
-            int cr = s.indexOf('\r', i);
-            if (cr == -1)
-                break;
-            String lenHex = s.substring(i, cr);
-            int len = Integer.parseInt(lenHex.trim(), 16);
-            if (len == 0)
-                break;
-            i = cr + 2;
-            out.append(s.substring(i, i + len));
-            i += len + 2;
+            int colonIdx = line.indexOf(':');
+            if (colonIdx == -1) {
+                return HTTPRequest.invalid();
+            }
+
+            String name = line.substring(0, colonIdx).trim().toLowerCase();
+            String value = line.substring(colonIdx + 1).trim();
+
+            if (headers.containsKey(name)) {
+                headers.put(name, headers.get(name) + ", " + value);
+            } else {
+                headers.put(name, value);
+            }
         }
-        return out.toString();
+
+        String body = null;
+        String remaining = "";
+        int bodyStart = headersEnd + 4;
+        String bodyData = raw.substring(bodyStart);
+
+        if (method.equals("POST")) {
+            if (!headers.containsKey("content-length")) {
+                return HTTPRequest.invalid();
+            }
+
+            long contentLength;
+            try {
+                contentLength = Long.parseLong(headers.get("content-length"));
+                if (contentLength < 0) {
+                    return HTTPRequest.invalid();
+                }
+            } catch (NumberFormatException e) {
+                return HTTPRequest.invalid();
+            }
+
+            if (contentLength > CLIENT_MAX_BODY) {
+                return HTTPRequest.invalid();
+            }
+
+            if (bodyData.length() < contentLength) {
+                return null;
+            }
+
+            body = bodyData.substring(0, (int) contentLength);
+            remaining = bodyData.substring((int) contentLength);
+
+        } else {
+            body = null;
+            remaining = bodyData;
+
+            if (headers.containsKey("content-length")) {
+                long cl;
+                try {
+                    cl = Long.parseLong(headers.get("content-length"));
+                    if (cl > 0) {
+                        return HTTPRequest.invalid();
+                    }
+                } catch (NumberFormatException e) {
+                    return HTTPRequest.invalid();
+                }
+            }
+        }
+
+        HTTPRequest request = new HTTPRequest();
+
+        request.method = method;
+
+        try {
+            request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            request.path = rawPath;
+        }
+
+        request.version = version;
+        request.headers = headers;
+        request.body = body;
+        request.valid = true;
+        request.remain = remaining;
+
+        return request;
     }
 }
