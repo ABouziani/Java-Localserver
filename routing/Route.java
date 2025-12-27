@@ -9,7 +9,7 @@ import java.util.Set;
 public class Route {
     public Set<String> methods = new HashSet<>();
     public String root = null;
-    public String index = "index.html";
+    public String index = "";
     public boolean dirList = false;
     public Map<String,String> cgi = new HashMap<>();
     public String redirect = null;

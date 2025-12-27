@@ -1,14 +1,27 @@
+import java.util.ArrayList;
+import java.util.List;
+
 import configurations.Config;
 import configurations.ConfigLoader;
+import server.MainServer;
 import server.Server;
 
 
 public class Main {
     public static void main(String[] args) throws Exception {
         String cfgPath = (args.length>0)? args[0] : "config.json";
-        Config config = ConfigLoader.load(cfgPath);
-        Server server = new Server(config);
-        server.start();
+        List<Config> Listconfigs = ConfigLoader.load(cfgPath);
+        List<Server> servers = new ArrayList<Server>();
+        System.out.println("+++++++");
+        for (Config config: Listconfigs){
+          Server server = new Server(config);
+          if (server.getCfg().defaultt) {
+            MainServer.defaultServer = server;
+          }
+          servers.add(server);
+        }
+        MainServer mainServer = new MainServer(servers);
+        mainServer.start();
     }
 }
 

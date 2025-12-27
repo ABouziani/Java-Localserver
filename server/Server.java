@@ -22,6 +22,7 @@ import java.util.UUID;
 import cgi.CGIHandler;
 import client.ClientState;
 import configurations.Config;
+import configurations.Listen;
 import http.HTTPParser;
 import http.HTTPRequest;
 import http.HTTPResponse;
@@ -31,70 +32,65 @@ import session.Session;
 
 public class Server {
     private final Config cfg;
-    private final Selector selector;
     private final Map<SocketChannel, ClientState> clients = new HashMap<>();
     private final Map<String, Session> sessions = new HashMap<>();
+    
     private final Router router;
     private final CGIHandler cgi;
 
+
     public Server(Config cfg) throws IOException {
+        MainServer.selector = Selector.open();
+
         this.cfg = cfg;
-        this.selector = Selector.open();
         this.router = new Router(cfg);
         this.cgi = new CGIHandler(cfg);
         setupListeners();
     }
 
     private void setupListeners() throws IOException {
-        for (int port : cfg.ports) {
+        for (Listen listen : cfg.listens) {
             ServerSocketChannel ssc = ServerSocketChannel.open();
             ssc.configureBlocking(false);
-            ssc.bind(new InetSocketAddress(cfg.host, port));
-            ssc.register(selector, SelectionKey.OP_ACCEPT);
-            System.out.println("Listening on " + cfg.host + ":" + port);
+            ssc.bind(new InetSocketAddress(listen.getIp(), listen.getPort()));
+            ssc.register(MainServer.selector, SelectionKey.OP_ACCEPT);
+            System.out.println("Listening on " + listen.getIp() + ":" + listen.getPort());
         }
     }
 
-    public void start() {
-        System.out.println("Server started (single-threaded NIO loop)");
-        try {
-            while (true) {
-                selector.select(1000); // timeout to allow housekeeping
-                Set<SelectionKey> keys = selector.selectedKeys();
-                Iterator<SelectionKey> it = keys.iterator();
-                while (it.hasNext()) {
-                    SelectionKey k = it.next();
-                    it.remove();
-                    try {
-                        if (k.isAcceptable())
-                            accept(k);
-                        else if (k.isReadable())
-                            read(k);
-                        else if (k.isWritable())
-                            write(k);
-                    } catch (CancelledKeyException cke) {
-                        continue;
-                    }
-                }
-                houseKeeping();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+    
+    
 
-    private void accept(SelectionKey key) throws IOException {
-        ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
-        SocketChannel sc = ssc.accept();
-        if (sc == null)
-            return;
-        sc.configureBlocking(false);
-        sc.socket().setSoTimeout(0);
-        sc.register(selector, SelectionKey.OP_READ);
+    
+
+    public void handleRequest(SocketChannel sc, HTTPRequest req) throws IOException {
+        // sessions
         clients.put(sc, new ClientState(sc));
+        String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
+        Session sess = null;
+        if (sid != null)
+            sess = sessions.get(sid);
+        if (sess == null) {
+            sid = UUID.randomUUID().toString();
+            sess = new Session(sid);
+            sessions.put(sid, sess);
+        }
+
+        HTTPResponse resp = router.route(req, sess, cgi);
+        // set session cookie
+        resp.headers.put("Set-Cookie", "SID=" + sid + "; Path=/; HttpOnly");
+        enqueueResponse(sc, resp);
     }
 
-    private void read(SelectionKey key) throws IOException {
+    public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
+        ClientState st = clients.get(sc);
+        if (st == null)
+            return;
+        st.pending.add(resp);
+        sc.register(MainServer.selector, SelectionKey.OP_WRITE);
+    }
+
+    public void read(SelectionKey key) throws IOException {
         SocketChannel sc = (SocketChannel) key.channel();
         ClientState st = clients.get(sc);
         if (st == null) {
@@ -103,7 +99,7 @@ public class Server {
         }
         int r = sc.read(st.readBuf);
         if (r == -1) {
-            closeClient(sc);
+            MainServer.closeClient(clients,sc);
             return;
         }
         st.lastActive = System.currentTimeMillis();
@@ -132,33 +128,7 @@ public class Server {
         }
     }
 
-    private void handleRequest(SocketChannel sc, HTTPRequest req) throws IOException {
-        // sessions
-        String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
-        Session sess = null;
-        if (sid != null)
-            sess = sessions.get(sid);
-        if (sess == null) {
-            sid = UUID.randomUUID().toString();
-            sess = new Session(sid);
-            sessions.put(sid, sess);
-        }
-
-        HTTPResponse resp = router.route(req, sess, cgi);
-        // set session cookie
-        resp.headers.put("Set-Cookie", "SID=" + sid + "; Path=/; HttpOnly");
-        enqueueResponse(sc, resp);
-    }
-
-    private void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
-        ClientState st = clients.get(sc);
-        if (st == null)
-            return;
-        st.pending.add(resp);
-        sc.register(selector, SelectionKey.OP_WRITE);
-    }
-
-    private void write(SelectionKey key) throws IOException {
+    public void write(SelectionKey key) throws IOException {
         SocketChannel sc = (SocketChannel) key.channel();
         ClientState st = clients.get(sc);
         if (st == null) {
@@ -166,7 +136,7 @@ public class Server {
             return;
         }
         if (st.pending.isEmpty()) {
-            sc.register(selector, SelectionKey.OP_READ);
+            sc.register(MainServer.selector, SelectionKey.OP_READ);
             return;
         }
         HTTPResponse resp = st.pending.peek();
@@ -191,7 +161,7 @@ public class Server {
             }
             st.pending.poll();
             if (!resp.keepAlive) {
-                closeClient(sc);
+                MainServer.closeClient(clients,sc);
                 return;
             }
         } else {
@@ -206,23 +176,23 @@ public class Server {
                 resp.fileChannel.close();
                 st.pending.poll();
                 if (!resp.keepAlive) {
-                    closeClient(sc);
+                    MainServer.closeClient(clients,sc);
                     return;
                 }
             }
         }
         // if more pending, keep OP_WRITE
         if (!st.pending.isEmpty())
-            sc.register(selector, SelectionKey.OP_WRITE);
+            sc.register(MainServer.selector, SelectionKey.OP_WRITE);
         else
-            sc.register(selector, SelectionKey.OP_READ);
+            sc.register(MainServer.selector, SelectionKey.OP_READ);
     }
 
-    private void closeClient(SocketChannel sc) throws IOException {
-        clients.remove(sc);
-        sc.close();
+    public Config getCfg() {
+        return cfg;
     }
 
+    
     private void houseKeeping() {
         // expire sessions (10m)
         long now = System.currentTimeMillis();
@@ -235,8 +205,17 @@ public class Server {
         }
         for (var sc : toClose)
             try {
-                closeClient(sc);
+                MainServer.closeClient(clients,sc);
             } catch (IOException ex) {
             }
     }
+
+    public Map<SocketChannel, ClientState> getClients() {
+        return clients;
+    }
+
+    public Map<String, Session> getSessions() {
+        return sessions;
+    }
+
 }

@@ -1,18 +1,36 @@
 package configurations;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class ConfigLoader {
-    public static Config load(String path) {
+    public static List<Config> load(String path) {
         try {
             String text = new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
-            Map<String,Object> m = ConfigParser.parse(text);
-            Config c = new Config();
-            return c.fromMap(m);
+            Map<String, Object> m = ConfigParser.parse(text);
+            // System.out.println(m);
+            // System.out.println("-------");
+            if (m.containsKey("servers")) {
+                Object o = m.get("servers");
+                if (o instanceof List) {
+                    List<?> rawList = (List<?>) o;
+                    List<Config> cfgs = new ArrayList<Config>();
+                    for (Object item : rawList) {
+                        
+                        if (item instanceof Map) {
+                            Map<String,Object> map = (Map<String,Object>) item; 
+                            cfgs.add(new Config().fromMap(map));
+                        }
+                        System.out.println("----------------");
+                    }
+                    return cfgs;
+                }
+            }
+            return null;
         } catch (Exception e) {
             System.err.println("Config error: " + e.getMessage());
             System.exit(1);

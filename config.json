@@ -1,14 +1,37 @@
 {
-  "ports"       : [4200, 8081],
+  "ports": [
+    4200,
+    8081
+  ],
   "host": "0.0.0.0",
   "root": "www",
   "clientMaxBody": 10485760,
   "errorPages": {
-    "404":"error_pages/404.html",
-    "500":"error_pages/500.html"
+    "404": "error_pages/404.html",
+    "500": "error_pages/500.html"
   },
   "routes": {
-    "/test": {"methods":["GET"], "root":"www", "index":"index.html", "dirList":true, "cgi":{"py":"python3"}},
-    "/me": {"methods":["GET"], "root":"www", "index":"err.html", "dirList":true, "cgi":{"py":"python3"}}
+    "/test": {
+      "methods": [
+        "GET"
+      ],
+      "root": "www",
+      "index": "index.html",
+      "dirList": true,
+      "cgi": {
+        "py": "python3"
+      }
+    },
+    "/me": {
+      "methods": [
+        "GET"
+      ],
+      "root": "www",
+      "index": "err.html",
+      "dirList": true,
+      "cgi": {
+        "py": "python3"
+      }
+    }
   }
 }
