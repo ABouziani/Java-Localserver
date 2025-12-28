@@ -8,7 +8,7 @@
     "500":"error_pages/500.html"
   },
   "routes": {
-    "/test": {"methods":["POST"], "root":"www", "index":"index.html", "dirList":true, "cgi":{"py":"python3"}},
+    "/test": {"methods":["GET"], "root":"www", "index":"index.html", "dirList":true, "cgi":{"py":"python3"}},
     "/me": {"methods":["GET"], "root":"www", "index":"err.html", "dirList":true, "cgi":{"py":"python3"}}
   }
 }

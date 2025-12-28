@@ -8,6 +8,9 @@ import java.util.Map;
 public class HTTPParser {
 
     public static long CLIENT_MAX_BODY = 10485760;
+    private static final int MAX_REQUEST_LINE_LENGTH = 8192;
+    private static final int MAX_HEADER_LINE_LENGTH = 8192;
+    private static final int MAX_HEADERS_SIZE = 16384;
 
     public static HTTPRequest tryParse(String raw) {
         
@@ -17,6 +20,11 @@ public class HTTPParser {
         }
 
         String headersSection = raw.substring(0, headersEnd);
+        
+        if (headersSection.length() > MAX_HEADERS_SIZE) {
+            return HTTPRequest.invalid();
+        }
+        
         String[] lines = headersSection.split("\r\n");
         
         if (lines.length == 0) {
@@ -24,6 +32,11 @@ public class HTTPParser {
         }
         
         String requestLine = lines[0];
+        
+        if (requestLine.length() > MAX_REQUEST_LINE_LENGTH) {
+            return HTTPRequest.invalid();
+        }
+        
         String[] parts = requestLine.split(" ");
         
         if (parts.length != 3) {
@@ -44,10 +57,32 @@ public class HTTPParser {
             return HTTPRequest.invalid();
         }
 
+        if (rawPath.isEmpty()) {
+            rawPath = "/";
+        }
+
+        if (!rawPath.startsWith("/")) {
+            return HTTPRequest.invalid();
+        }
+
+        if (rawPath.contains(" ") || rawPath.contains("\t")) {
+            return HTTPRequest.invalid();
+        }
+        
         Map<String, String> headers = new HashMap<>();
         
         for (int i = 1; i < lines.length; i++) {
-            String line = lines[i].trim();
+            String line = lines[i];
+            
+            if (line.length() > MAX_HEADER_LINE_LENGTH) {
+                return HTTPRequest.invalid();
+            }
+            
+            if (line.startsWith(" ") || line.startsWith("\t")) {
+                return HTTPRequest.invalid();
+            }
+            
+            line = line.trim();
             if (line.isEmpty()) continue;
             
             int colonIdx = line.indexOf(':');
@@ -55,13 +90,23 @@ public class HTTPParser {
                 return HTTPRequest.invalid();
             }
             
-            String name = line.substring(0, colonIdx).trim().toLowerCase();
+            String name = line.substring(0, colonIdx).trim();
             String value = line.substring(colonIdx + 1).trim();
             
-            if (headers.containsKey(name)) {
-                headers.put(name, headers.get(name) + ", " + value);
+            if (!isValidHeaderName(name)) {
+                return HTTPRequest.invalid();
+            }
+            
+            if (value.contains("\r") || value.contains("\n") || value.contains("\0")) {
+                return HTTPRequest.invalid();
+            }
+            
+            String normalizedName = name.toLowerCase();
+            
+            if (headers.containsKey(normalizedName)) {
+                headers.put(normalizedName, headers.get(normalizedName) + ", " + value);
             } else {
-                headers.put(name, value);
+                headers.put(normalizedName, value);
             }
         }
 
@@ -84,8 +129,21 @@ public class HTTPParser {
                 return HTTPRequest.invalid();
             }
             
+            String clValue = headers.get("content-length");
+            
+            if (clValue.contains(",")) {
+                String[] values = clValue.split(",");
+                String firstValue = values[0].trim();
+                for (String v : values) {
+                    if (!v.trim().equals(firstValue)) {
+                        return HTTPRequest.invalid();
+                    }
+                }
+                clValue = firstValue;
+            }
+            
             try {
-                contentLength = Long.parseLong(headers.get("content-length"));
+                contentLength = Long.parseLong(clValue);
                 if (contentLength < 0) {
                     return HTTPRequest.invalid();
                 }
@@ -153,9 +211,25 @@ public class HTTPParser {
         request.headers = headers;
         request.body = body;
         request.valid = true;
-        request.remaining = remaining;
+        request.remain = remaining;
         
         return request;
+    }
+
+    private static boolean isValidHeaderName(String name) {
+        if (name.isEmpty()) return false;
+        for (char c : name.toCharArray()) {
+            if (!isTokenChar(c)) return false;
+        }
+        return true;
+    }
+
+    private static boolean isTokenChar(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+               (c >= '0' && c <= '9') || 
+               c == '!' || c == '#' || c == '$' || c == '%' || c == '&' ||
+               c == '\'' || c == '*' || c == '+' || c == '-' || c == '.' ||
+               c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
     }
 
     private static ChunkResult parseChunkedBody(String data) {
@@ -231,7 +305,7 @@ public class HTTPParser {
         }
     }
 
-    private static class ChunkResult {
+    static class ChunkResult {
         String body;
         String remaining;
         
