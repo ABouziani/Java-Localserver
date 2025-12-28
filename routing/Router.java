@@ -7,16 +7,16 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import cgi.CGIHandler;
-import configurations.Config;
+import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
 import parsing.MultipartForm;
 import session.Session;;
 
 public class Router {
-    private final Config cfg;
+    private final ServerConfig cfg;
 
-    public Router(Config cfg) {
+    public Router(ServerConfig cfg) {
         this.cfg = cfg;
     }
 
@@ -27,7 +27,7 @@ public class Router {
         // find route by prefix (simple longest match)
         Route matched = null;
         String matchedPath = "";
-        for (var en : cfg.routes.entrySet()) {
+        for (var en : cfg.getRoutes().entrySet()) {
             String p = en.getKey();
             if (req.path.startsWith(p) && p.length() >= matchedPath.length()) {
                 matched = en.getValue();
@@ -36,7 +36,7 @@ public class Router {
         }
         if (matched == null)
             matched = new Route();
-        matched.root = cfg.root;
+        matched.root = cfg.getRoot();
         // redirect
         if (matched.redirect != null) {
             return HTTPResponse.redirect(matched.redirect);
@@ -45,7 +45,7 @@ public class Router {
             return HTTPResponse.error(405, cfg);
         }
         // map path
-        Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.root);
+        Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
         if (rel.equals("") || rel.equals("/"))
             rel = "/" + matched.index;
@@ -65,7 +65,7 @@ public class Router {
             return HTTPResponse.error(404, cfg);
         // CGI handling by extension
         String ext = getExt(f.getName());
-        if (matched.cgi.containsKey(ext) || cfg.routes.values().stream().anyMatch(r -> r.cgi.containsKey(ext))) {
+        if (matched.cgi.containsKey(ext) || cfg.getRoutes().values().stream().anyMatch(r -> r.cgi.containsKey(ext))) {
             // run cgi
             return cgi.execute(req, f);
         }

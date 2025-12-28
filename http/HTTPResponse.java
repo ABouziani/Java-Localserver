@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
-import configurations.Config;
+import configurations.ServerConfig;
 
 public class HTTPResponse {
     public int status;
@@ -24,12 +24,12 @@ public class HTTPResponse {
     public FileChannel fileChannel = null;
     public long filePos = 0;
 
-    public static HTTPResponse error(int code, Config cfg) {
+    public static HTTPResponse error(int code, ServerConfig cfg) {
         HTTPResponse r = new HTTPResponse();
         r.status = code;
         r.headers.put("Connection", "close");
         r.keepAlive = false;
-        String path = cfg.errorPages.getOrDefault(String.valueOf(code), null);
+        String path = cfg.getErrorPages().getOrDefault(String.valueOf(code), null);
         if (path != null && Files.exists(Paths.get(path))) {
             r.streamed = true;
             r.file = new File(path);

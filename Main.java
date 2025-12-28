@@ -1,26 +1,27 @@
 import java.util.ArrayList;
 import java.util.List;
 
+import configurations.ServerConfig;
 import configurations.Config;
 import configurations.ConfigLoader;
-import server.MainServer;
-import server.Server;
+import core.MainServer;
+import core.VirtualServer;
 
 
 public class Main {
     public static void main(String[] args) throws Exception {
         String cfgPath = (args.length>0)? args[0] : "config.json";
-        List<Config> Listconfigs = ConfigLoader.load(cfgPath);
-        List<Server> servers = new ArrayList<Server>();
+        List<ServerConfig> Listconfigs = ConfigLoader.load(cfgPath);
+        List<VirtualServer> servers = new ArrayList<VirtualServer>();
         System.out.println("+++++++");
-        for (Config config: Listconfigs){
-          Server server = new Server(config);
-          if (server.getCfg().defaultt) {
-            MainServer.defaultServer = server;
-          }
+        MainServer mainServer = new MainServer(new Config(Listconfigs));
+        for (ServerConfig config: Listconfigs){
+          VirtualServer server = new VirtualServer(config,mainServer);
+          // if (server.gte().defaultt) {
+          //   MainServer.getDefaultt() = server;
+          // }
           servers.add(server);
         }
-        MainServer mainServer = new MainServer(servers);
         mainServer.start();
     }
 }
