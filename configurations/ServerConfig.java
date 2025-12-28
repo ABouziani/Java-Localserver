@@ -14,7 +14,7 @@ public class ServerConfig {
     private String root = "";
     private Map<String, String> errorPages = new HashMap<>();
     private Map<String, Route> routes = new HashMap<>();
-    private Boolean defaultt = false;
+    private Boolean isdefault;
 
     
     
@@ -53,7 +53,7 @@ public class ServerConfig {
         if (m.containsKey("root"))
             this.root = (String) m.get("root");
         if (m.containsKey("default"))
-            this.defaultt = (String) m.get("default") == "true";
+            this.isdefault = (String) m.get("default") == "true";
         if (m.containsKey("clientMaxBody"))
             this.clientMaxBody = ((Number) m.get("clientMaxBody")).intValue();
         if (m.containsKey("errorPages")) {
@@ -87,6 +87,6 @@ public class ServerConfig {
     public Map<String, Route> getRoutes() { return routes; }
     public void setRoutes(Map<String, Route> routes) { this.routes = routes; }
     
-    public Boolean getDefaultt() { return defaultt; }
-    public void setDefaultt(Boolean defaultt) { this.defaultt = defaultt; }
+    public Boolean getIsDefault() { return isdefault; }
+    public void setIsDefaultt(Boolean defaultt) { this.isdefault = defaultt; }
 }

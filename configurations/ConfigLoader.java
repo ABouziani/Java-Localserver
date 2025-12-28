@@ -12,8 +12,6 @@ public class ConfigLoader {
         try {
             String text = new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
             Map<String, Object> m = ConfigParser.parse(text);
-            // System.out.println(m);
-            // System.out.println("-------");
             if (m.containsKey("servers")) {
                 Object o = m.get("servers");
                 if (o instanceof List) {

@@ -1,21 +1,17 @@
 package core;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 import client.ClientState;
 import configurations.Config;
-import http.HTTPRequest;
 import http.HTTPResponse;
-import session.Session;
 
 public class MainServer {
     private final Selector selector;
@@ -56,10 +52,13 @@ public class MainServer {
     private void handleAccept(SelectionKey key) throws IOException {
         ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
         SocketChannel clientChannel = serverChannel.accept();
+        if (clientChannel == null)
+            return;
         clientChannel.configureBlocking(false);
-
-        // Create new client state
+        // get add (ip:port) from socket channal and set it in client state 
+        String listenAddress = (String) key.attachment();
         ClientState state = new ClientState(clientChannel);
+        state.setListenAddress(listenAddress);
         clients.put(clientChannel, state);
 
         clientChannel.register(selector, SelectionKey.OP_READ, state);
@@ -69,12 +68,9 @@ public class MainServer {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
 
-        // Read request
-        // Parse Host header to determine which VirtualServer to use
-        String host = extractHostFromRequest(state);
-        VirtualServer server = serverManager.getServerForHost(host);
-
-        // Delegate to the appropriate virtual server
+        // Parse ip:port from socketChannel to determine which VirtualServer to use
+        String listenAddress = state.getListenAddress();
+        VirtualServer server = serverManager.getServer(listenAddress);
         server.read(channel, state);
     }
 
@@ -82,7 +78,7 @@ public class MainServer {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
         if (state == null) {
-            channel.close();
+            closeClient(channel);
             return;
         }
         if (state.pending.isEmpty()) {
@@ -95,43 +91,11 @@ public class MainServer {
         else
             channel.register(selector, SelectionKey.OP_READ);
 
-        String host = extractHostFromRequest(state);
-        VirtualServer server = serverManager.getServerForHost(host);
-
-        // Delegate to the appropriate virtual server
+        String listenAddress = state.getListenAddress();
+        VirtualServer server = serverManager.getServer(listenAddress);
         server.write(channel, state);
-        // if (state == null || !state.hasResponseToWrite()) {
-        // key.interestOps(SelectionKey.OP_READ);
-        // return;
-        // }
-
-        // Write response data
-        // boolean finished = state.writeResponse(channel);
-
-        // if (finished) {
-        // // Check if keep-alive or close connection
-        // if (state.shouldKeepAlive()) {
-        // state.reset();
-        // key.interestOps(SelectionKey.OP_READ);
-        // } else {
-        // closeConnection(channel, key);
-        // }
-        // }
     }
-    private String extractHostFromRequest(ClientState state) {
-        HTTPRequest req = state.getCurrentRequest();
-        
-        if (req == null) {
-            return null;
-        }
-        String host = req.headers.getOrDefault("Host", "");
-        if (host.contains(":")) {
-            host = host.substring(0, host.indexOf(":"));
-        }
-        return host.toLowerCase().trim();
-    }
-    
-    
+   
 
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
         ClientState st = clients.get(sc);
@@ -140,6 +104,12 @@ public class MainServer {
         st.pending.add(resp);
         sc.register(selector, SelectionKey.OP_WRITE);
     }
+
+    public void closeClient(SocketChannel sc) throws IOException {
+        clients.remove(sc);
+        sc.close();
+    }
+
     // public void enqueueResponse(SocketChannel sc, HTTPResponse resp, ClientState state) {
     //     state.setResponse(resp);
 
@@ -159,5 +129,19 @@ public class MainServer {
     //         // Log error
     //     }
     // }
+     // private String extractHostFromRequest(ClientState state) {
+    //     HTTPRequest req = state.getCurrentRequest();
+        
+    //     if (req == null) {
+    //         return null;
+    //     }
+    //     String host = req.headers.getOrDefault("Host", "");
+    //     if (host.contains(":")) {
+    //         host = host.substring(0, host.indexOf(":"));
+    //     }
+    //     return host.toLowerCase().trim();
+    // }
+    
+    
     
 }

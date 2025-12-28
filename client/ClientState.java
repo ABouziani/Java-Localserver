@@ -17,6 +17,7 @@ public class ClientState {
     public long lastActive = System.currentTimeMillis();
     public boolean closed = false;
     private HTTPRequest currentRequest;
+    private String listenAddress;
     public ClientState(SocketChannel ch) {
         this.ch = ch;
     }
@@ -25,5 +26,11 @@ public class ClientState {
     }
     public void setCurrentRequest(HTTPRequest c) {
         currentRequest= c;
+    }
+    public String getListenAddress() {
+        return listenAddress;
+    }
+    public void setListenAddress(String l) {
+        listenAddress = l;
     }
 }
