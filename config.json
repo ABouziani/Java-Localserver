@@ -5,16 +5,42 @@
   },
   "servers": [
     {
-      "hosts": [
-        "example.com",
-        "www.example.com"
-      ],
-      "listen": [
-        {
-          "ip": "0.0.0.0",
-          "port": 8080
+      "host": "www.example.com",
+      "ports": [8080,8989],
+      "root": "www",
+      "clientMaxBody": 10485760,
+      "errorPages": {
+        "404": "error_pages/404.html",
+        "500": "error_pages/500.html"
+      },
+      "routes": {
+        "/test": {
+          "methods": [
+            "GET"
+          ],
+          "root": "www",
+          "index": "index.html",
+          "dirList": true,
+          "cgi": {
+            "py": "python3"
+          }
+        },
+        "/me": {
+          "methods": [
+            "GET"
+          ],
+          "root": "www",
+          "index": "err.html",
+          "dirList": true,
+          "cgi": {
+            "py": "python3"
+          }
         }
-      ],
+      }
+    },
+     {
+      "host": "www.example.com",
+      "ports": [8081,8985],
       "root": "www",
       "clientMaxBody": 10485760,
       "errorPages": {
@@ -47,4 +73,4 @@
       }
     }
   ]
-}
+} 

@@ -18,11 +18,6 @@ public class Config {
         this.servers = servers;
     }
     
-    // Parse from JSON
-    // public static Config fromJson(String jsonPath) {
-    //     // Parse JSON file and populate Config object
-    // }
-    
     public Map<String, String> getGlobalErrorPages() {
         return globalErrorPages;
     }

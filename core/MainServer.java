@@ -55,7 +55,7 @@ public class MainServer {
         if (clientChannel == null)
             return;
         clientChannel.configureBlocking(false);
-        // get add (ip:port) from socket channal and set it in client state 
+        // get add (port) from socket channal and set it in client state 
         String listenAddress = (String) key.attachment();
         ClientState state = new ClientState(clientChannel);
         state.setListenAddress(listenAddress);
@@ -68,7 +68,7 @@ public class MainServer {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
 
-        // Parse ip:port from socketChannel to determine which VirtualServer to use
+        // Parse port from socketChannel to determine which VirtualServer to use
         String listenAddress = state.getListenAddress();
         VirtualServer server = serverManager.getServer(listenAddress);
         server.read(channel, state);

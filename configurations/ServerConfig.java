@@ -8,47 +8,33 @@ import java.util.Map;
 import routing.Route;
 
 public class ServerConfig {
-    private List<String> hosts = new ArrayList<>();
-    private List<Listen> listens = new ArrayList<>();
+    private String host = new String();
+    private List<Integer> ports = new ArrayList<>();
     private int clientMaxBody = 10 * 1024 * 1024; // 10MB default
     private String root = "";
     private Map<String, String> errorPages = new HashMap<>();
     private Map<String, Route> routes = new HashMap<>();
-    private Boolean isdefault;
+    private Boolean isdefault = false;
 
-    
-    
     public ServerConfig fromMap(Map<?, ?> m) {
-        if (m.containsKey("listen")) {
-            Object o = m.get("listen");
+        if (m.containsKey("ports")) {
+            Object o = m.get("ports");
             if (o instanceof List) {
                 List<?> rawList = (List<?>) o;
-                List<Listen> listensList = new ArrayList<>();
+                List<Integer> portsList = new ArrayList<>();
 
                 for (Object item : rawList) {
-                    if (item instanceof Map) {
-                        Map<?, ?> mapItem = (Map<?, ?>) item;
-                        String ip = (String) mapItem.get("ip");
-                        int port = ((Number) mapItem.get("port")).intValue();
-                        listensList.add(new Listen(ip, port));
+                    if (item instanceof Number) {
+                        int port = ((Number) item).intValue();
+                        portsList.add(port);
                     }
                 }
 
-                this.listens = listensList;
+                this.ports = portsList;
             }
         }
-        if (m.containsKey("hosts")) {
-            Object o = m.get("hosts");
-            if (o instanceof List) {
-                List<?> rawList = (List<?>) o;
-                List<String> hostList = new ArrayList<>();
-                for (Object item : rawList) {
-                    if (item instanceof String) {
-                        hostList.add((String) item);
-                    }
-                }
-                this.hosts = hostList;
-            }
+        if (m.containsKey("host")) {
+            this.host = (String) m.get("hosts");
         }
         if (m.containsKey("root"))
             this.root = (String) m.get("root");
@@ -69,24 +55,60 @@ public class ServerConfig {
         }
         return this;
     }
-    public List<String> getHosts() { return hosts; }
-    public void setHosts(List<String> hosts) { this.hosts = hosts; }
-    
-    public List<Listen> getListens() { return listens; }
-    public void setListens(List<Listen> listens) { this.listens = listens; }
-    
-    public int getClientMaxBody() { return clientMaxBody; }
-    public void setClientMaxBody(int clientMaxBody) { this.clientMaxBody = clientMaxBody; }
-    
-    public String getRoot() { return root; }
-    public void setRoot(String root) { this.root = root; }
-    
-    public Map<String, String> getErrorPages() { return errorPages; }
-    public void setErrorPages(Map<String, String> errorPages) { this.errorPages = errorPages; }
-    
-    public Map<String, Route> getRoutes() { return routes; }
-    public void setRoutes(Map<String, Route> routes) { this.routes = routes; }
-    
-    public Boolean getIsDefault() { return isdefault; }
-    public void setIsDefaultt(Boolean defaultt) { this.isdefault = defaultt; }
+
+    public String getHost() {
+        return host;
+    }
+
+    public void setHost(String host) {
+        this.host = host;
+    }
+
+    public List<Integer> getPorts() {
+        return ports;
+    }
+
+    public void setPorts(List<Integer> ports) {
+        this.ports = ports;
+    }
+
+    public int getClientMaxBody() {
+        return clientMaxBody;
+    }
+
+    public void setClientMaxBody(int clientMaxBody) {
+        this.clientMaxBody = clientMaxBody;
+    }
+
+    public String getRoot() {
+        return root;
+    }
+
+    public void setRoot(String root) {
+        this.root = root;
+    }
+
+    public Map<String, String> getErrorPages() {
+        return errorPages;
+    }
+
+    public void setErrorPages(Map<String, String> errorPages) {
+        this.errorPages = errorPages;
+    }
+
+    public Map<String, Route> getRoutes() {
+        return routes;
+    }
+
+    public void setRoutes(Map<String, Route> routes) {
+        this.routes = routes;
+    }
+
+    public Boolean getIsDefault() {
+        return isdefault;
+    }
+
+    public void setIsDefaultt(Boolean defaultt) {
+        this.isdefault = defaultt;
+    }
 }

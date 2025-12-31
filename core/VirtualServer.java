@@ -17,7 +17,6 @@ import configurations.ServerConfig;
 import http.HTTPParser;
 import http.HTTPRequest;
 import http.HTTPResponse;
-import configurations.Listen;
 import routing.Route;
 import routing.Router;
 import session.Cookie;
@@ -31,26 +30,25 @@ public class VirtualServer {
     private final CGIHandler cgiHandler;
     private final Map<String, Session> sessions = new HashMap<>();
 
-    private final List<Listen> listens;
+    private final List<Integer> ports;
     private final int clientMaxBody;
     private final String root;
     private final Map<String, String> errorPages;
     private final Map<String, Route> routes;
-    private final List<String> hosts;
+    private final String host;
     private final boolean isDefault;
 
     public VirtualServer(ServerConfig config, MainServer mainServer) {
         this.config = config;
         this.mainServer = mainServer;
 
-        this.listens = config.getListens();
+        this.ports = config.getPorts();
         this.clientMaxBody = config.getClientMaxBody();
         this.root = config.getRoot();
         this.errorPages = config.getErrorPages();
         this.routes = config.getRoutes();
-        this.hosts = config.getHosts();
+        this.host = config.getHost();
         this.isDefault = config.getIsDefault();
-
         this.router = new Router(config);
         this.cgiHandler = new CGIHandler(config);
     }
@@ -154,8 +152,8 @@ public class VirtualServer {
         mainServer.enqueueResponse(sc, resp);
     }
  
-    public List<Listen> getListens() {
-        return listens;
+    public List<Integer> getPorts() {
+        return ports;
     }
 
     public int getClientMaxBody() {
@@ -180,5 +178,11 @@ public class VirtualServer {
 
     public CGIHandler getCgiHandler() {
         return cgiHandler;
+    }
+    public String getHost(){
+        return host;
+    }
+    public Boolean getIsDefault(){
+        return isDefault;
     }
 }

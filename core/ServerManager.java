@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Set;
 
 import configurations.Config;
-import configurations.Listen;
 import configurations.ServerConfig;
 
 public class ServerManager {
@@ -26,10 +25,6 @@ public class ServerManager {
             VirtualServer vs = new VirtualServer(serverCfg, mainServer);
             virtualServers.add(vs);
             
-            // for (String host : serverCfg.getHosts()) {
-            //     addressToServer.put(host.toLowerCase(), vs);
-            // }
-            
             if (serverCfg.getIsDefault()) {
                 defaultServer = vs;
             }
@@ -39,14 +34,14 @@ public class ServerManager {
     public void bindAllListeners(Selector selector) throws IOException {
         Set<String> boundAddresses = new HashSet<>();
         for (VirtualServer server : virtualServers) {
-            for (Listen listen : server.getListens()) {
-                String key = listen.getIp() + ":" + listen.getPort();
+            for (Integer port : server.getPorts()) {
+                String key = String.valueOf(port);
                 // Only bind once per unique ip:port
                 if (!boundAddresses.contains(key)) {
                     addressToServer.put(key, server);
                     ServerSocketChannel serverChannel = ServerSocketChannel.open();
                     serverChannel.configureBlocking(false);
-                    serverChannel.bind(new InetSocketAddress(listen.getIp(), listen.getPort()));
+                    serverChannel.bind(new InetSocketAddress(port));
                     serverChannel.register(selector, SelectionKey.OP_ACCEPT,key);
                     boundAddresses.add(key);
                 }else{
