@@ -9,15 +9,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import configurations.Config;
+import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
 
 public class CGIHandler {
 
-    private final Config cfg;
+    private final ServerConfig cfg;
 
-    public CGIHandler(Config cfg) {
+    public CGIHandler(ServerConfig cfg) {
         this.cfg = cfg;
     }
 

@@ -1,14 +1,17 @@
+import java.util.List;
+
+import configurations.ServerConfig;
 import configurations.Config;
 import configurations.ConfigLoader;
-import server.Server;
+import core.MainServer;
 
 
 public class Main {
     public static void main(String[] args) throws Exception {
         String cfgPath = (args.length>0)? args[0] : "config.json";
-        Config config = ConfigLoader.load(cfgPath);
-        Server server = new Server(config);
-        server.start();
+        List<ServerConfig> Listconfigs = ConfigLoader.load(cfgPath);
+        MainServer mainServer = new MainServer(new Config(Listconfigs));
+        mainServer.start();
     }
 }
 
@@ -34,3 +37,4 @@ public class Main {
 3) create config.json as example above
 4) java -cp out Main config.json
 */
+
