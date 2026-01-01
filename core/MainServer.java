@@ -57,13 +57,23 @@ public class MainServer {
         SocketChannel clientChannel = serverChannel.accept();
         if (clientChannel == null)
             return;
-        clientChannel.configureBlocking(false);
-        // get add (port) from socket channal and set it in client state 
-        // String listenAddress = (String) key.attachment();
-        ClientState state = new ClientState(clientChannel);
-        clients.put(clientChannel, state);
 
-        clientChannel.register(selector, SelectionKey.OP_READ, state);
+        try {
+            clientChannel.configureBlocking(false);
+
+            // Optional: configure socket options
+            // clientChannel.socket().setTcpNoDelay(true);
+            // clientChannel.socket().setKeepAlive(true);
+
+            ClientState state = new ClientState(clientChannel);
+            clients.put(clientChannel, state);
+
+            SelectionKey clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
+            clientKey.attach(state); 
+        } catch (IOException e) {
+            closeClient(clientChannel);
+            throw e;
+        }
     }
 
     private void handleRead(SelectionKey key) throws IOException {
@@ -71,7 +81,7 @@ public class MainServer {
         ClientState state = clients.get(channel);
 
         // Parse port from socketChannel to determine which VirtualServer to use
-         int r = channel.read(state.readBuf);
+        int r = channel.read(state.readBuf);
         if (r == -1) {
             closeClient(channel);
             return;
@@ -89,16 +99,15 @@ public class MainServer {
                 break;
             state.setCurrentRequest(req);
             state.in = new StringBuilder(req.remain);
-            if (server == null){
+            if (server == null) {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
-                
-                if (server == null){
-                    state.setListenAddress(host);
-                    System.err.println("Warning: No server found for address " + host + 
-                                 "");
+                if (server == null) {
+                    System.err.println("Warning: No server found for address " + host +
+                    "");
                     break;
                 }
+                state.setListenAddress(host);
             }
             server.read(req, state, channel);
         }
@@ -126,7 +135,6 @@ public class MainServer {
         VirtualServer server = serverManager.getServer(listenAddress);
         server.write(channel, state);
     }
-   
 
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
         ClientState st = clients.get(sc);
@@ -141,38 +149,37 @@ public class MainServer {
         sc.close();
     }
 
-    // public void enqueueResponse(SocketChannel sc, HTTPResponse resp, ClientState state) {
-    //     state.setResponse(resp);
+    // public void enqueueResponse(SocketChannel sc, HTTPResponse resp, ClientState
+    // state) {
+    // state.setResponse(resp);
 
-    //     // Trigger write by updating interest ops
-    //     SelectionKey key = sc.keyFor(selector);
-    //     if (key != null && key.isValid()) {
-    //         key.interestOps(SelectionKey.OP_WRITE);
-    //         selector.wakeup(); // Wake up selector if it's blocked
-    //     }
+    // // Trigger write by updating interest ops
+    // SelectionKey key = sc.keyFor(selector);
+    // if (key != null && key.isValid()) {
+    // key.interestOps(SelectionKey.OP_WRITE);
+    // selector.wakeup(); // Wake up selector if it's blocked
+    // }
     // }
     // private void closeConnection(SocketChannel channel, SelectionKey key) {
-    //     try {
-    //         clients.remove(channel);
-    //         key.cancel();
-    //         channel.close();
-    //     } catch (IOException e) {
-    //         // Log error
-    //     }
+    // try {
+    // clients.remove(channel);
+    // key.cancel();
+    // channel.close();
+    // } catch (IOException e) {
+    // // Log error
     // }
-     // private String extractHostFromRequest(ClientState state) {
-    //     HTTPRequest req = state.getCurrentRequest();
-        
-    //     if (req == null) {
-    //         return null;
-    //     }
-    //     String host = req.headers.getOrDefault("Host", "");
-    //     if (host.contains(":")) {
-    //         host = host.substring(0, host.indexOf(":"));
-    //     }
-    //     return host.toLowerCase().trim();
     // }
-    
-    
-    
+    // private String extractHostFromRequest(ClientState state) {
+    // HTTPRequest req = state.getCurrentRequest();
+
+    // if (req == null) {
+    // return null;
+    // }
+    // String host = req.headers.getOrDefault("Host", "");
+    // if (host.contains(":")) {
+    // host = host.substring(0, host.indexOf(":"));
+    // }
+    // return host.toLowerCase().trim();
+    // }
+
 }

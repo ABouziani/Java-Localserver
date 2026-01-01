@@ -33,6 +33,7 @@ public class ServerManager {
 
     public void bindAllListeners(Selector selector) throws IOException {
         Set<String> boundAddresses = new HashSet<>();
+        Set<Integer> portscreated = new HashSet<>();
         for (VirtualServer server : virtualServers) {
             String key = server.getHost();
             if (!boundAddresses.contains(key)) {
@@ -40,10 +41,13 @@ public class ServerManager {
                 for (Integer port : server.getPorts()) {
                     // Only bind once per unique ip:port
                     addressToServer.put(key, server);
-                    ServerSocketChannel serverChannel = ServerSocketChannel.open();
-                    serverChannel.configureBlocking(false);
-                    serverChannel.bind(new InetSocketAddress(port));
-                    serverChannel.register(selector, SelectionKey.OP_ACCEPT, key);
+                    if (!portscreated.contains(port)){
+                        portscreated.add(port);
+                        ServerSocketChannel serverChannel = ServerSocketChannel.open();
+                        serverChannel.configureBlocking(false);
+                        serverChannel.bind(new InetSocketAddress(port));
+                        serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+                    }
                 }
             } else {
                 throw new IllegalArgumentException(
@@ -54,6 +58,7 @@ public class ServerManager {
     }
 
     public VirtualServer getServer(String host) {
+        
         VirtualServer server = addressToServer.get(host);
 
         if (server == null) {

@@ -40,7 +40,7 @@
     },
      {
       "host": "www.example.com",
-      "ports": [8081,8985],
+      "ports": [8080,8985],
       "root": "www",
       "clientMaxBody": 10485760,
       "errorPages": {
