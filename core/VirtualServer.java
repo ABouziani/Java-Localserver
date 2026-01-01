@@ -14,7 +14,6 @@ import java.util.UUID;
 import cgi.CGIHandler;
 import client.ClientState;
 import configurations.ServerConfig;
-import http.HTTPParser;
 import http.HTTPRequest;
 import http.HTTPResponse;
 import routing.Route;
@@ -53,42 +52,21 @@ public class VirtualServer {
         this.cgiHandler = new CGIHandler(config);
     }
 
-    public void read(SocketChannel sc, ClientState state) throws IOException {
-
-        int r = sc.read(state.readBuf);
-        if (r == -1) {
-            mainServer.closeClient(sc);
+    public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
+        if (req.body != null && req.body.length() > config.getClientMaxBody()) {
+            mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
             return;
         }
-        state.lastActive = System.currentTimeMillis();
-        state.readBuf.flip();
-        byte[] b = new byte[state.readBuf.remaining()];
-        state.readBuf.get(b);
-        state.readBuf.clear();
-        state.in.append(new String(b, StandardCharsets.UTF_8));
-        // parse requests (support pipelining simple)
-        while (true) {
-            HTTPRequest req = HTTPParser.tryParse(state.in.toString());
-            if (req == null)
-                break;
-            state.setCurrentRequest(req);
-            state.in = new StringBuilder(req.remain);
-            // cap body size
-            if (req.body != null && req.body.length() > config.getClientMaxBody()) {
-                mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
-                continue;
-            }
-            try {
-                handleRequest(sc, req, state);
-            } catch (Throwable t) {
-                t.printStackTrace();
-                mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
-            }
+        try {
+            handleRequest(sc, req, state);
+        } catch (Throwable t) {
+            t.printStackTrace();
+            mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
         }
     }
 
     public void write(SocketChannel sc, ClientState state) throws IOException {
-       
+
         HTTPResponse resp = state.pending.peek();
         if (!resp.sentHeader) {
             byte[] h = resp.toHeaderBytes();
@@ -131,7 +109,7 @@ public class VirtualServer {
                 }
             }
         }
-        
+
     }
 
     private void handleRequest(SocketChannel sc, HTTPRequest req, ClientState state) throws IOException {
@@ -151,7 +129,7 @@ public class VirtualServer {
         resp.headers.put("Set-Cookie", "SID=" + sid + "; Path=/; HttpOnly");
         mainServer.enqueueResponse(sc, resp);
     }
- 
+
     public List<Integer> getPorts() {
         return ports;
     }
@@ -179,10 +157,12 @@ public class VirtualServer {
     public CGIHandler getCgiHandler() {
         return cgiHandler;
     }
-    public String getHost(){
+
+    public String getHost() {
         return host;
     }
-    public Boolean getIsDefault(){
+
+    public Boolean getIsDefault() {
         return isDefault;
     }
 }

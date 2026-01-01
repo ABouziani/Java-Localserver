@@ -19,51 +19,49 @@ public class ServerManager {
     private final List<VirtualServer> virtualServers = new ArrayList<>();
     private final Map<String, VirtualServer> addressToServer = new HashMap<>();
     private VirtualServer defaultServer;
-    
+
     public ServerManager(Config config, MainServer mainServer) {
         for (ServerConfig serverCfg : config.getServers()) {
             VirtualServer vs = new VirtualServer(serverCfg, mainServer);
             virtualServers.add(vs);
-            
+
             if (serverCfg.getIsDefault()) {
                 defaultServer = vs;
             }
         }
     }
-    
+
     public void bindAllListeners(Selector selector) throws IOException {
         Set<String> boundAddresses = new HashSet<>();
         for (VirtualServer server : virtualServers) {
-            for (Integer port : server.getPorts()) {
-                String key = String.valueOf(port);
-                // Only bind once per unique ip:port
-                if (!boundAddresses.contains(key)) {
+            String key = server.getHost();
+            if (!boundAddresses.contains(key)) {
+                boundAddresses.add(key);
+                for (Integer port : server.getPorts()) {
+                    // Only bind once per unique ip:port
                     addressToServer.put(key, server);
                     ServerSocketChannel serverChannel = ServerSocketChannel.open();
                     serverChannel.configureBlocking(false);
                     serverChannel.bind(new InetSocketAddress(port));
-                    serverChannel.register(selector, SelectionKey.OP_ACCEPT,key);
-                    boundAddresses.add(key);
-                }else{
-                    throw new IllegalArgumentException(
-                        "Duplicate listen address: " + key + 
-                        " - each ip:port must be unique to one server"
-                    );
+                    serverChannel.register(selector, SelectionKey.OP_ACCEPT, key);
                 }
+            } else {
+                throw new IllegalArgumentException(
+                        "Duplicate host address: " + key +
+                                " - each host must be unique to one server");
             }
         }
     }
-    
-   public VirtualServer getServer(String listenAddress) {
-        VirtualServer server = addressToServer.get(listenAddress);
-        
+
+    public VirtualServer getServer(String host) {
+        VirtualServer server = addressToServer.get(host);
+
         if (server == null) {
-            System.err.println("Warning: No server found for address " + listenAddress + 
-                             ", using default");
+            System.err.println("Warning: No server found for address " + host +
+                    ", using default");
+
             return defaultServer;
         }
-        
         return server;
     }
 }
-

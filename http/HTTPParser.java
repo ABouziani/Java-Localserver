@@ -28,8 +28,10 @@ public class HTTPParser {
             int idx = line.indexOf(':');
             if (idx == -1)
                 continue;
-            String k = line.substring(0, idx);
+
+            String k = line.substring(0, idx).toLowerCase();
             String v = line.substring(idx + 1).trim();
+        
             headers.put(k, v);
         }
         int contentLength = headers.containsKey("Content-Length") ? Integer.parseInt(headers.get("Content-Length"))

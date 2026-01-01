@@ -5,7 +5,7 @@
   },
   "servers": [
     {
-      "host": "www.example.com",
+      "host": "www.exampl.com",
       "ports": [8080,8989],
       "root": "www",
       "clientMaxBody": 10485760,
@@ -47,6 +47,8 @@
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
       },
+      "default": true
+      ,
       "routes": {
         "/test": {
           "methods": [

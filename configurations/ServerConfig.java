@@ -34,12 +34,12 @@ public class ServerConfig {
             }
         }
         if (m.containsKey("host")) {
-            this.host = (String) m.get("hosts");
+            this.host = (String) m.get("host");
         }
         if (m.containsKey("root"))
             this.root = (String) m.get("root");
         if (m.containsKey("default"))
-            this.isdefault = (String) m.get("default") == "true";
+            this.isdefault = (Boolean) m.get("default");
         if (m.containsKey("clientMaxBody"))
             this.clientMaxBody = ((Number) m.get("clientMaxBody")).intValue();
         if (m.containsKey("errorPages")) {

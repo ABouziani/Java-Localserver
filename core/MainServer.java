@@ -5,12 +5,15 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 import client.ClientState;
 import configurations.Config;
+import http.HTTPParser;
+import http.HTTPRequest;
 import http.HTTPResponse;
 
 public class MainServer {
@@ -56,9 +59,8 @@ public class MainServer {
             return;
         clientChannel.configureBlocking(false);
         // get add (port) from socket channal and set it in client state 
-        String listenAddress = (String) key.attachment();
+        // String listenAddress = (String) key.attachment();
         ClientState state = new ClientState(clientChannel);
-        state.setListenAddress(listenAddress);
         clients.put(clientChannel, state);
 
         clientChannel.register(selector, SelectionKey.OP_READ, state);
@@ -69,9 +71,38 @@ public class MainServer {
         ClientState state = clients.get(channel);
 
         // Parse port from socketChannel to determine which VirtualServer to use
-        String listenAddress = state.getListenAddress();
-        VirtualServer server = serverManager.getServer(listenAddress);
-        server.read(channel, state);
+         int r = channel.read(state.readBuf);
+        if (r == -1) {
+            closeClient(channel);
+            return;
+        }
+        state.lastActive = System.currentTimeMillis();
+        state.readBuf.flip();
+        byte[] b = new byte[state.readBuf.remaining()];
+        state.readBuf.get(b);
+        state.readBuf.clear();
+        state.in.append(new String(b, StandardCharsets.UTF_8));
+        VirtualServer server = null;
+        while (true) {
+            HTTPRequest req = HTTPParser.tryParse(state.in.toString());
+            if (req == null)
+                break;
+            state.setCurrentRequest(req);
+            state.in = new StringBuilder(req.remain);
+            if (server == null){
+                String host = req.headers.get("host");
+                server = serverManager.getServer(host);
+                
+                if (server == null){
+                    state.setListenAddress(host);
+                    System.err.println("Warning: No server found for address " + host + 
+                                 "");
+                    break;
+                }
+            }
+            server.read(req, state, channel);
+        }
+
     }
 
     private void handleWrite(SelectionKey key) throws IOException {
