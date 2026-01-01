@@ -15,9 +15,7 @@
       },
       "routes": {
         "/test": {
-          "methods": [
-            "GET"
-          ],
+          "methods": ["GET"],
           "root": "www",
           "index": "index.html",
           "dirList": true,
