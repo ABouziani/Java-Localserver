@@ -7,67 +7,98 @@ import java.util.Map;
 
 public class HTTPParser {
 
-    public static long CLIENT_MAX_BODY = 10485760;
+    public static long CLIENT_MAX_BODY = 10485760; // 10MB
     private static final int MAX_REQUEST_LINE_LENGTH = 8192;
     private static final int MAX_HEADER_LINE_LENGTH = 8192;
     private static final int MAX_HEADERS_SIZE = 16384;
+    private static final int MAX_URI_LENGTH = 8192;
 
     public static HTTPRequest tryParse(String raw) {
         
         int headersEnd = raw.indexOf("\r\n\r\n");
         if (headersEnd == -1) {
-            return null;
+            return null; 
         }
 
         String headersSection = raw.substring(0, headersEnd);
         
         if (headersSection.length() > MAX_HEADERS_SIZE) {
-            return HTTPRequest.invalid();
+            return HTTPRequest.invalid(431, "Request header fields too large");
         }
         
         String[] lines = headersSection.split("\r\n");
         
         if (lines.length == 0) {
-            return HTTPRequest.invalid();
+            return HTTPRequest.invalid(400, "Empty request");
         }
         
         String requestLine = lines[0];
         
-        if (requestLine.length() > MAX_REQUEST_LINE_LENGTH) {
-            return HTTPRequest.invalid();
+        
+        if (requestLine.startsWith(" ") || requestLine.endsWith(" ")) {
+            return HTTPRequest.invalid(400, "Request line has leading or trailing spaces");
         }
         
-        String[] parts = requestLine.split(" ");
+        if (requestLine.length() > MAX_REQUEST_LINE_LENGTH) {
+            return HTTPRequest.invalid(431, "Request line too long");
+        }
+        
+        if (requestLine.contains("  ")) {
+            return HTTPRequest.invalid(400, "Request line contains multiple spaces");
+        }
+        
+        String[] parts = requestLine.split(" ", 4); 
         
         if (parts.length != 3) {
-            return HTTPRequest.invalid();
+            return HTTPRequest.invalid(400, "Invalid request line format");
+        }
+        
+        if (parts[0].isEmpty() || parts[1].isEmpty() || parts[2].isEmpty()) {
+            return HTTPRequest.invalid(400, "Request line has empty components");
         }
 
-        String method = parts[0].toUpperCase();
+        String method = parts[0];
         String rawPath = parts[1];
         String version = parts[2];
 
-        if (!version.equals("HTTP/1.1")) {
-            return HTTPRequest.invalid();
+        
+        if (!isValidMethod(method)) {
+            return HTTPRequest.invalid(400, "Invalid method format");
         }
-
+        
         if (!method.equals("GET") && 
             !method.equals("POST") && 
-            !method.equals("DELETE")) {
-            return HTTPRequest.invalid();
+            !method.equals("DELETE") 
+        ){
+            return HTTPRequest.invalid(501, "Method not implemented: " + method);
         }
 
-        if (rawPath.isEmpty()) {
-            rawPath = "/";
-        }
-
+        
         if (!rawPath.startsWith("/")) {
-            return HTTPRequest.invalid();
+            return HTTPRequest.invalid(400, "Request target must start with /");
+        }
+        
+        if (rawPath.length() > MAX_URI_LENGTH) {
+            return HTTPRequest.invalid(414, "URI too long");
+        }
+        
+        if (rawPath.contains(" ") || rawPath.contains("\t")) {
+            return HTTPRequest.invalid(400, "Request target contains unencoded whitespace");
+        }
+        
+        if (rawPath.contains("\r") || rawPath.contains("\n") || rawPath.contains("\0")) {
+            return HTTPRequest.invalid(400, "Request target contains control characters");
         }
 
-        if (rawPath.contains(" ") || rawPath.contains("\t")) {
-            return HTTPRequest.invalid();
+        
+        if (!version.matches("HTTP/\\d\\.\\d")) {
+            return HTTPRequest.invalid(400, "Invalid HTTP version format");
         }
+        
+        if (!version.equals("HTTP/1.1") ) {
+            return HTTPRequest.invalid(505, "HTTP version not supported: " + version);
+        }
+
         
         Map<String, String> headers = new HashMap<>();
         
@@ -75,11 +106,11 @@ public class HTTPParser {
             String line = lines[i];
             
             if (line.length() > MAX_HEADER_LINE_LENGTH) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(431, "Header line too long");
             }
             
             if (line.startsWith(" ") || line.startsWith("\t")) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, "Obsolete line folding detected");
             }
             
             line = line.trim();
@@ -87,18 +118,22 @@ public class HTTPParser {
             
             int colonIdx = line.indexOf(':');
             if (colonIdx == -1) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, "Invalid header format: missing colon");
+            }
+            
+            if (colonIdx == 0) {
+                return HTTPRequest.invalid(400, "Invalid header: empty field name");
             }
             
             String name = line.substring(0, colonIdx).trim();
             String value = line.substring(colonIdx + 1).trim();
             
             if (!isValidHeaderName(name)) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, "Invalid header field name: " + name);
             }
             
             if (value.contains("\r") || value.contains("\n") || value.contains("\0")) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, "Invalid header field value");
             }
             
             String normalizedName = name.toLowerCase();
@@ -110,10 +145,14 @@ public class HTTPParser {
             }
         }
 
-        if (!headers.containsKey("host") || headers.get("host").trim().isEmpty()) {
-            return HTTPRequest.invalid();
+        
+        if (version.equals("HTTP/1.1")) {
+            if (!headers.containsKey("host") || headers.get("host").trim().isEmpty()) {
+                return HTTPRequest.invalid(400, "Missing Host header (required for HTTP/1.1)");
+            }
         }
 
+        
         long contentLength = -1;
         boolean isChunked = false;
         
@@ -125,8 +164,9 @@ public class HTTPParser {
         }
         
         if (headers.containsKey("content-length")) {
+            
             if (isChunked) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, "Both Content-Length and chunked Transfer-Encoding present");
             }
             
             String clValue = headers.get("content-length");
@@ -134,54 +174,57 @@ public class HTTPParser {
             if (clValue.contains(",")) {
                 String[] values = clValue.split(",");
                 String firstValue = values[0].trim();
+                
                 for (String v : values) {
                     if (!v.trim().equals(firstValue)) {
-                        return HTTPRequest.invalid();
+                        return HTTPRequest.invalid(400, "Multiple different Content-Length values");
                     }
                 }
                 clValue = firstValue;
             }
             
             try {
-                contentLength = Long.parseLong(clValue);
+                contentLength = Long.parseLong(clValue.trim());
                 if (contentLength < 0) {
-                    return HTTPRequest.invalid();
+                    return HTTPRequest.invalid(400, "Negative Content-Length");
                 }
             } catch (NumberFormatException e) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, "Invalid Content-Length value");
             }
         }
 
+        
         String body = null;
         String remaining = "";
         int bodyStart = headersEnd + 4;
         String bodyData = raw.substring(bodyStart);
         
-        if (method.equals("POST")) {
+        if (method.equals("POST") || method.equals("PUT")) {
+            
             if (!isChunked && contentLength == -1) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(411, "POST requires Content-Length or Transfer-Encoding: chunked");
             }
             
             if (isChunked) {
                 ChunkResult result = parseChunkedBody(bodyData);
                 if (result == null) {
-                    return null;
+                    return null; 
                 }
                 
                 body = result.body;
                 remaining = result.remaining;
                 
                 if (body.length() > CLIENT_MAX_BODY) {
-                    return HTTPRequest.invalid();
+                    return HTTPRequest.invalid(413, "Request body too large");
                 }
                 
             } else {
                 if (contentLength > CLIENT_MAX_BODY) {
-                    return HTTPRequest.invalid();
+                    return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
                 }
                 
                 if (bodyData.length() < contentLength) {
-                    return null;
+                    return null; 
                 }
                 
                 body = bodyData.substring(0, (int) contentLength);
@@ -193,10 +236,11 @@ public class HTTPParser {
             remaining = bodyData;
             
             if (isChunked || contentLength > 0) {
-                return HTTPRequest.invalid();
+                return HTTPRequest.invalid(400, method + " request must not have a body");
             }
         }
 
+        
         HTTPRequest request = new HTTPRequest();
         
         request.method = method;
@@ -216,6 +260,17 @@ public class HTTPParser {
         return request;
     }
 
+    
+    private static boolean isValidMethod(String method) {
+        if (method.isEmpty()) return false;
+        for (char c : method.toCharArray()) {
+            if (!isTokenChar(c) || Character.isLowerCase(c)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static boolean isValidHeaderName(String name) {
         if (name.isEmpty()) return false;
         for (char c : name.toCharArray()) {
@@ -232,6 +287,7 @@ public class HTTPParser {
                c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
     }
 
+    
     private static ChunkResult parseChunkedBody(String data) {
         StringBuilder fullBody = new StringBuilder();
         int position = 0;
@@ -241,7 +297,7 @@ public class HTTPParser {
                 
                 int lineEnd = data.indexOf("\r\n", position);
                 if (lineEnd == -1) {
-                    return null;
+                    return null; 
                 }
                 
                 String chunkSizeLine = data.substring(position, lineEnd).trim();
@@ -260,6 +316,10 @@ public class HTTPParser {
                 try {
                     chunkSize = Integer.parseInt(chunkSizeLine, 16);
                 } catch (NumberFormatException e) {
+                    return null; 
+                }
+                
+                if (chunkSize < 0) {
                     return null;
                 }
                 
@@ -279,7 +339,7 @@ public class HTTPParser {
                     } else {
                         int trailersEnd = data.indexOf("\r\n\r\n", position);
                         if (trailersEnd == -1) {
-                            return null;
+                            return null; // Incomplete
                         }
                         String remaining = data.substring(trailersEnd + 4);
                         return new ChunkResult(fullBody.toString(), remaining);
@@ -289,7 +349,7 @@ public class HTTPParser {
                 position = lineEnd + 2;
                 
                 if (position + chunkSize + 2 > data.length()) {
-                    return null;
+                    return null; // Incomplete chunk
                 }
                 
                 String chunkData = data.substring(position, position + chunkSize);
@@ -298,10 +358,10 @@ public class HTTPParser {
                 position += chunkSize + 2;
             }
             
-            return null;
+            return null; // Incomplete (no final chunk)
             
         } catch (Exception e) {
-            return null;
+            return null; // Parse error
         }
     }
 

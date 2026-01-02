@@ -1,5 +1,10 @@
 package core;
 
+import client.ClientState;
+import configurations.Config;
+import http.HTTPParser;
+import http.HTTPRequest;
+import http.HTTPResponse;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -9,12 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-
-import client.ClientState;
-import configurations.Config;
-import http.HTTPParser;
-import http.HTTPRequest;
-import http.HTTPResponse;
 
 public class MainServer {
     private final Selector selector;
@@ -97,14 +96,24 @@ public class MainServer {
             HTTPRequest req = HTTPParser.tryParse(state.in.toString());
             if (req == null)
                 break;
+            if (req.valid == false) {
+                HTTPResponse resp = new HTTPResponse();
+                resp.keepAlive = false;
+                System.out.print(req.errorCode);
+                resp.body = req.getErrorResponse();
+                resp.headers.put("Content-Type", "text/html; charset=utf-8");
+                resp.headers.put("Content-Length", Integer.toString(resp.body.getBytes().length));
+                state.pending.add(resp);
+                channel.register(selector, SelectionKey.OP_WRITE);
+                return;
+            }
             state.setCurrentRequest(req);
             state.in = new StringBuilder(req.remain);
             if (server == null) {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
                 if (server == null) {
-                    System.err.println("Warning: No server found for address " + host +
-                    "");
+                  
                     break;
                 }
                 state.setListenAddress(host);
