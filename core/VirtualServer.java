@@ -67,6 +67,7 @@ public class VirtualServer {
 
     public void write(SocketChannel sc, ClientState state) throws IOException {
 
+        if (state.pending.isEmpty()) return;
         HTTPResponse resp = state.pending.peek();
         if (!resp.sentHeader) {
             byte[] h = resp.toHeaderBytes();
@@ -89,7 +90,7 @@ public class VirtualServer {
             }
             state.pending.poll();
             if (!resp.keepAlive) {
-                // closeClient(sc);
+                mainServer.closeClient(sc);
                 return;
             }
         } else {
@@ -98,6 +99,7 @@ public class VirtualServer {
                 resp.fileChannel = FileChannel.open(resp.file.toPath(), StandardOpenOption.READ);
                 resp.filePos = 0;
             }
+            System.out.println(resp.file.toPath());
             long transferred = resp.fileChannel.transferTo(resp.filePos, 8192, sc);
             resp.filePos += transferred;
             if (resp.filePos >= resp.file.length()) {

@@ -56,7 +56,7 @@ public class MainServer {
         SocketChannel clientChannel = serverChannel.accept();
         if (clientChannel == null)
             return;
-
+ 
         try {
             clientChannel.configureBlocking(false);
 
@@ -113,9 +113,11 @@ public class MainServer {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
                 if (server == null) {
-                  
+                    System.err.println("Warning: No server found for address " + host +
+                    "");
                     break;
                 }
+                state.setListenAddress(host);
                 state.setListenAddress(host);
             }
             server.read(req, state, channel);
@@ -157,38 +159,4 @@ public class MainServer {
         clients.remove(sc);
         sc.close();
     }
-
-    // public void enqueueResponse(SocketChannel sc, HTTPResponse resp, ClientState
-    // state) {
-    // state.setResponse(resp);
-
-    // // Trigger write by updating interest ops
-    // SelectionKey key = sc.keyFor(selector);
-    // if (key != null && key.isValid()) {
-    // key.interestOps(SelectionKey.OP_WRITE);
-    // selector.wakeup(); // Wake up selector if it's blocked
-    // }
-    // }
-    // private void closeConnection(SocketChannel channel, SelectionKey key) {
-    // try {
-    // clients.remove(channel);
-    // key.cancel();
-    // channel.close();
-    // } catch (IOException e) {
-    // // Log error
-    // }
-    // }
-    // private String extractHostFromRequest(ClientState state) {
-    // HTTPRequest req = state.getCurrentRequest();
-
-    // if (req == null) {
-    // return null;
-    // }
-    // String host = req.headers.getOrDefault("Host", "");
-    // if (host.contains(":")) {
-    // host = host.substring(0, host.indexOf(":"));
-    // }
-    // return host.toLowerCase().trim();
-    // }
-
 }

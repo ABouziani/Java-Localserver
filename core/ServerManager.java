@@ -25,8 +25,11 @@ public class ServerManager {
             VirtualServer vs = new VirtualServer(serverCfg, mainServer);
             virtualServers.add(vs);
 
-            if (serverCfg.getIsDefault()) {
+            if (serverCfg.getIsDefault() && defaultServer == null) {
                 defaultServer = vs;
+            } else if (serverCfg.getIsDefault() && defaultServer != null) {
+                throw new IllegalArgumentException(
+                        "Multiple default servers defined; only one server can be default");
             }
         }
     }
@@ -38,9 +41,9 @@ public class ServerManager {
             String key = server.getHost();
             if (!boundAddresses.contains(key)) {
                 boundAddresses.add(key);
+                addressToServer.put(key, server);
                 for (Integer port : server.getPorts()) {
                     // Only bind once per unique ip:port
-                    addressToServer.put(key, server);
                     if (!portscreated.contains(port)){
                         portscreated.add(port);
                         ServerSocketChannel serverChannel = ServerSocketChannel.open();
@@ -58,6 +61,7 @@ public class ServerManager {
     }
 
     public VirtualServer getServer(String host) {
+        
         
         VirtualServer server = addressToServer.get(host);
 

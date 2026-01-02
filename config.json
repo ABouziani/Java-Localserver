@@ -15,9 +15,7 @@
       },
       "routes": {
         "/test": {
-          "methods": [
-            "GET"
-          ],
+          "methods": ["GET"],
           "root": "www",
           "index": "index.html",
           "dirList": true,
@@ -50,9 +48,9 @@
       "default": true
       ,
       "routes": {
-        "/test": {
+        "/tt": {
           "methods": [
-            "GET"
+            "GET","POST"
           ],
           "root": "www",
           "index": "index.html",
@@ -66,7 +64,7 @@
             "GET"
           ],
           "root": "www",
-          "index": "err.html",
+          "index": "me.html",
           "dirList": true,
           "cgi": {
             "py": "python3"
