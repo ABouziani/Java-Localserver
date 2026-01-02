@@ -62,6 +62,7 @@ public class ServerManager {
 
     public VirtualServer getServer(String host) {
         
+        
         VirtualServer server = addressToServer.get(host);
 
         if (server == null) {

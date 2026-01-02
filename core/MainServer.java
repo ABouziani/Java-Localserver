@@ -1,5 +1,10 @@
 package core;
 
+import client.ClientState;
+import configurations.Config;
+import http.HTTPParser;
+import http.HTTPRequest;
+import http.HTTPResponse;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -9,12 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-
-import client.ClientState;
-import configurations.Config;
-import http.HTTPParser;
-import http.HTTPRequest;
-import http.HTTPResponse;
 
 public class MainServer {
     private final Selector selector;
@@ -97,6 +96,17 @@ public class MainServer {
             HTTPRequest req = HTTPParser.tryParse(state.in.toString());
             if (req == null)
                 break;
+            if (req.valid == false) {
+                HTTPResponse resp = new HTTPResponse();
+                resp.keepAlive = false;
+                System.out.print(req.errorCode);
+                resp.body = req.getErrorResponse();
+                resp.headers.put("Content-Type", "text/html; charset=utf-8");
+                resp.headers.put("Content-Length", Integer.toString(resp.body.getBytes().length));
+                state.pending.add(resp);
+                channel.register(selector, SelectionKey.OP_WRITE);
+                return;
+            }
             state.setCurrentRequest(req);
             state.in = new StringBuilder(req.remain);
             if (server == null) {
@@ -107,6 +117,7 @@ public class MainServer {
                     "");
                     break;
                 }
+                state.setListenAddress(host);
                 state.setListenAddress(host);
             }
             server.read(req, state, channel);
@@ -148,38 +159,4 @@ public class MainServer {
         clients.remove(sc);
         sc.close();
     }
-
-    // public void enqueueResponse(SocketChannel sc, HTTPResponse resp, ClientState
-    // state) {
-    // state.setResponse(resp);
-
-    // // Trigger write by updating interest ops
-    // SelectionKey key = sc.keyFor(selector);
-    // if (key != null && key.isValid()) {
-    // key.interestOps(SelectionKey.OP_WRITE);
-    // selector.wakeup(); // Wake up selector if it's blocked
-    // }
-    // }
-    // private void closeConnection(SocketChannel channel, SelectionKey key) {
-    // try {
-    // clients.remove(channel);
-    // key.cancel();
-    // channel.close();
-    // } catch (IOException e) {
-    // // Log error
-    // }
-    // }
-    // private String extractHostFromRequest(ClientState state) {
-    // HTTPRequest req = state.getCurrentRequest();
-
-    // if (req == null) {
-    // return null;
-    // }
-    // String host = req.headers.getOrDefault("Host", "");
-    // if (host.contains(":")) {
-    // host = host.substring(0, host.indexOf(":"));
-    // }
-    // return host.toLowerCase().trim();
-    // }
-
 }
