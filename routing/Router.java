@@ -47,9 +47,11 @@ public class Router {
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
+        System.out.println("******************");
         if (rel.equals("") || rel.equals("/"))
             rel = "/" + matched.index;
-        Path target = fsroot.resolve(rel.substring(1)).normalize();
+        Path target = fsroot.resolve(rel).normalize();
+        System.out.println(target);
         if (!target.startsWith(fsroot))
             return HTTPResponse.error(403, cfg);
         File f = target.toFile();
