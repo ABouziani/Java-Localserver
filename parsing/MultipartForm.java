@@ -24,7 +24,7 @@ public class MultipartForm {
         if (i == -1)
             return mf;
         String b = "--" + ct.substring(i + 9);
-        byte[] body = req.body != null ? req.body.getBytes(StandardCharsets.ISO_8859_1) : new byte[0];
+        byte[] body = req.body != null ? req.body : new byte[0];
         String all = new String(body, StandardCharsets.ISO_8859_1);
         String[] chunks = all.split(Pattern.quote(b));
         for (String ch : chunks) {

@@ -53,7 +53,7 @@ public class VirtualServer {
     }
 
     public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
-        if (req.body != null && req.body.length() > config.getClientMaxBody()) {
+        if (req.body != null && req.getBodyLength() > config.getClientMaxBody()) {
             mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
             return;
         }
@@ -82,7 +82,7 @@ public class VirtualServer {
         }
         if (!resp.streamed) {
             if (resp.body != null) {
-                state.writeBuf = ByteBuffer.wrap(resp.body.getBytes(StandardCharsets.UTF_8));
+                state.writeBuf = ByteBuffer.wrap(resp.body);
                 sc.write(state.writeBuf);
                 if (state.writeBuf.hasRemaining())
                     return; // partial

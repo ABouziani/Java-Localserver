@@ -56,7 +56,7 @@ public class MainServer {
         SocketChannel clientChannel = serverChannel.accept();
         if (clientChannel == null)
             return;
- 
+
         try {
             clientChannel.configureBlocking(false);
 
@@ -68,7 +68,7 @@ public class MainServer {
             clients.put(clientChannel, state);
 
             SelectionKey clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
-            clientKey.attach(state); 
+            clientKey.attach(state);
         } catch (IOException e) {
             closeClient(clientChannel);
             throw e;
@@ -93,28 +93,30 @@ public class MainServer {
         state.in.append(new String(b, StandardCharsets.UTF_8));
         VirtualServer server = null;
         while (true) {
-            HTTPRequest req = HTTPParser.tryParse(state.in.toString());
+            byte[] remaining = state.in.toString().getBytes(StandardCharsets.UTF_8);
+            HTTPRequest req = HTTPParser.tryParse(remaining);
             if (req == null)
                 break;
             if (req.valid == false) {
                 HTTPResponse resp = new HTTPResponse();
                 resp.keepAlive = false;
-                System.out.print(req.errorCode);
-                resp.body = req.getErrorResponse();
+                String errorHtml = req.getErrorResponse();
+
+                resp.body = errorHtml.getBytes(StandardCharsets.UTF_8);
                 resp.headers.put("Content-Type", "text/html; charset=utf-8");
-                resp.headers.put("Content-Length", Integer.toString(resp.body.getBytes().length));
+                resp.headers.put("Content-Length", Integer.toString(resp.body.length));
                 state.pending.add(resp);
                 channel.register(selector, SelectionKey.OP_WRITE);
                 return;
             }
             state.setCurrentRequest(req);
-            state.in = new StringBuilder(req.remain);
+            state.in = new StringBuilder(req.remain.toString());
             if (server == null) {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
                 if (server == null) {
                     System.err.println("Warning: No server found for address " + host +
-                    "");
+                            "");
                     break;
                 }
                 state.setListenAddress(host);

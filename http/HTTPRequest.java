@@ -1,5 +1,6 @@
 package http;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -9,9 +10,12 @@ public class HTTPRequest {
     public String path;
     public String version;
     public Map<String, String> headers = new HashMap<>();
-    public String body;
+    
+    public byte[] body;
+    
     public boolean valid = true;
-    public String remain = "";
+    
+    public byte[] remain = new byte[0];
     
     public int errorCode = 0;
     public String errorMessage = "";
@@ -25,9 +29,46 @@ public class HTTPRequest {
         r.valid = false;
         r.errorCode = statusCode;
         r.errorMessage = message;
-        System.out.println(r.errorCode);
-        System.out.println(statusCode);
+       
         return r;
+    }
+    
+    
+    public String getBodyAsString() {
+        if (body == null) {
+            return null;
+        }
+        return new String(body, StandardCharsets.UTF_8);
+    }
+    
+
+    public String getBodyAsString(String charset) {
+        if (body == null) {
+            return null;
+        }
+        try {
+            return new String(body, charset);
+        } catch (Exception e) {
+            return new String(body, StandardCharsets.UTF_8);
+        }
+    }
+
+    public boolean hasBody() {
+        return body != null && body.length > 0;
+    }
+    
+    
+    public int getBodyLength() {
+        return body == null ? 0 : body.length;
+    }
+    
+
+    public byte[] getRemainingBytes() {
+        return remain;
+    }
+   
+    public boolean hasRemaining() {
+        return remain != null && remain.length > 0;
     }
     
     public String getErrorResponse() {
@@ -35,16 +76,25 @@ public class HTTPRequest {
             return null;
         }
         String statusText = getStatusText(this.errorCode);
-        String body = "<html><body><h1>" + errorCode + " " + statusText + "</h1><p>" + errorMessage + "</p></body></html>";
+        String bodyText = "<html><body><h1>" + errorCode + " " + statusText + "</h1><p>" + errorMessage + "</p></body></html>";
         
         StringBuilder response = new StringBuilder();
         response.append("HTTP/1.1 ").append(errorCode).append(" ").append(statusText).append("\r\n");
         response.append("Content-Type: text/html; charset=utf-8\r\n");
-        response.append("Content-Length: ").append(body.getBytes().length).append("\r\n");
+        response.append("Content-Length: ").append(bodyText.getBytes(StandardCharsets.UTF_8).length).append("\r\n");
         response.append("Connection: close\r\n");
         response.append("\r\n");
-        response.append(body);
+        response.append(bodyText);
         return response.toString();
+    }
+    
+   
+    public byte[] getErrorResponseBytes() {
+        String response = getErrorResponse();
+        if (response == null) {
+            return null;
+        }
+        return response.getBytes(StandardCharsets.UTF_8);
     }
     
     private static String getStatusText(int code) {

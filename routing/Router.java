@@ -89,7 +89,7 @@ public class Router {
                     }
                     return HTTPResponse.simple(200, "Uploaded");
                 }
-                return HTTPResponse.simple(200, req.body != null ? req.body : "");
+                return HTTPResponse.simple(200, req.body != null ? req.body.toString() : "");
             default:
                 return HTTPResponse.error(405, cfg);
         }
