@@ -78,7 +78,11 @@ public class MainServer {
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
-
+        if (System.currentTimeMillis() - state.lastActive >= 20000) {
+            // handle on the write also
+            closeClient(channel);
+            return;
+        }  
         // Parse port from socketChannel to determine which VirtualServer to use
         int r = channel.read(state.readBuf);
         if (r == -1) {
