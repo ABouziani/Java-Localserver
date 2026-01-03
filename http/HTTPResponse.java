@@ -1,5 +1,6 @@
 package http;
 
+import configurations.ServerConfig;
 import java.io.File;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -10,8 +11,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-
-import configurations.ServerConfig;
 
 public class HTTPResponse {
     public int status;

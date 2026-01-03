@@ -16,6 +16,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 public class MainServer {
+
     private final Selector selector;
     private final ServerManager serverManager;
     private final Map<SocketChannel, ClientState> clients = new HashMap<>();
@@ -37,8 +38,9 @@ public class MainServer {
                 SelectionKey key = keys.next();
                 keys.remove();
 
-                if (!key.isValid())
+                if (!key.isValid()) {
                     continue;
+                }
 
                 if (key.isAcceptable()) {
                     handleAccept(key);
@@ -54,16 +56,12 @@ public class MainServer {
     private void handleAccept(SelectionKey key) throws IOException {
         ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
         SocketChannel clientChannel = serverChannel.accept();
-        if (clientChannel == null)
+        if (clientChannel == null) {
             return;
+        }
 
         try {
             clientChannel.configureBlocking(false);
-
-            // Optional: configure socket options
-            // clientChannel.socket().setTcpNoDelay(true);
-            // clientChannel.socket().setKeepAlive(true);
-
             ClientState state = new ClientState(clientChannel);
             clients.put(clientChannel, state);
 
@@ -95,28 +93,31 @@ public class MainServer {
         while (true) {
             byte[] remaining = state.in.toString().getBytes(StandardCharsets.UTF_8);
             HTTPRequest req = HTTPParser.tryParse(remaining);
-            if (req == null)
+            if (req == null) {
                 break;
+            }
             if (req.valid == false) {
                 HTTPResponse resp = new HTTPResponse();
+                resp.status = (req.errorCode != 0) ? req.errorCode : 400;
                 resp.keepAlive = false;
                 String errorHtml = req.getErrorResponse();
-
                 resp.body = errorHtml.getBytes(StandardCharsets.UTF_8);
                 resp.headers.put("Content-Type", "text/html; charset=utf-8");
                 resp.headers.put("Content-Length", Integer.toString(resp.body.length));
                 state.pending.add(resp);
+                System.out.println("Error processing request: " + req.errorCode + " " + req.errorMessage);
                 channel.register(selector, SelectionKey.OP_WRITE);
                 return;
             }
+
             state.setCurrentRequest(req);
             state.in = new StringBuilder(req.remain.toString());
             if (server == null) {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
                 if (server == null) {
-                    System.err.println("Warning: No server found for address " + host +
-                            "");
+                    System.err.println("Warning: No server found for address " + host
+                            + "");
                     break;
                 }
                 state.setListenAddress(host);
@@ -139,10 +140,11 @@ public class MainServer {
             return;
         }
         // if more pending, keep OP_WRITE
-        if (!state.pending.isEmpty())
+        if (!state.pending.isEmpty()) {
             channel.register(selector, SelectionKey.OP_WRITE);
-        else
+        } else {
             channel.register(selector, SelectionKey.OP_READ);
+        }
 
         String listenAddress = state.getListenAddress();
         VirtualServer server = serverManager.getServer(listenAddress);
@@ -151,8 +153,9 @@ public class MainServer {
 
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
         ClientState st = clients.get(sc);
-        if (st == null)
+        if (st == null) {
             return;
+        }
         st.pending.add(resp);
         sc.register(selector, SelectionKey.OP_WRITE);
     }

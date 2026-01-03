@@ -369,7 +369,7 @@ public class HTTPParser {
                 position += (int) chunkSize + 2; // Skip chunk data + CRLF
             }
 
-            return null; // Incomplete (no final chunk)
+            return null; 
 
         } catch (Exception e) {
             return null; // Parse error
