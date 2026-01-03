@@ -19,7 +19,7 @@ public class MultipartForm {
 
     public static MultipartForm parse(HTTPRequest req) throws IOException {
         MultipartForm mf = new MultipartForm();
-        String ct = req.headers.getOrDefault("Content-Type", "");
+        String ct = req.headers.getOrDefault("content-type", "");
         int i = ct.indexOf("boundary=");
         if (i == -1)
             return mf;

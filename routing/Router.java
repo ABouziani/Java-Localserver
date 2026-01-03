@@ -34,9 +34,11 @@ public class Router {
                 matchedPath = p;
             }
         }
-        if (matched == null)
+        if (matched == null) {
+            ////////////////////////////////////////////////////////
             matched = new Route();
-        matched.root = cfg.getRoot();
+            matched.root = cfg.getRoot();
+        }
         // redirect
         if (matched.redirect != null) {
             return HTTPResponse.redirect(matched.redirect);
@@ -47,11 +49,9 @@ public class Router {
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
-        System.out.println("******************");
         if (rel.equals("") || rel.equals("/"))
             rel = "/" + matched.index;
-        Path target = fsroot.resolve(rel).normalize();
-        System.out.println(target);
+        Path target = fsroot.resolve(rel.substring(1)).normalize();
         if (!target.startsWith(fsroot))
             return HTTPResponse.error(403, cfg);
         File f = target.toFile();
@@ -63,8 +63,8 @@ public class Router {
                 return HTTPResponse.dirListing(f);
             return HTTPResponse.error(403, cfg);
         }
-        if (!f.exists())
-            return HTTPResponse.error(404, cfg);
+        // if (!f.exists())
+        // return HTTPResponse.error(404, cfg);
         // CGI handling by extension
         String ext = getExt(f.getName());
         if (matched.cgi.containsKey(ext) || cfg.getRoutes().values().stream().anyMatch(r -> r.cgi.containsKey(ext))) {
@@ -82,10 +82,13 @@ public class Router {
                 else
                     return HTTPResponse.error(500, cfg);
             case "POST": // naive upload: if body present and content-type multipart/form-data
-                String ct = req.headers.getOrDefault("Content-Type", "");
+                String ct = req.headers.getOrDefault("content-type", "");
+                // System.out.println(ct);
                 if (ct.startsWith("multipart/form-data")) {
                     MultipartForm mf = MultipartForm.parse(req);
+                    // System.out.print(req.body);
                     for (var part : mf.files) {
+                        System.out.println("5555555555555555555555");
                         Path out = Paths.get(matched.root, part.filename).normalize();
                         Files.write(out, part.data);
                     }
@@ -102,3 +105,4 @@ public class Router {
         return i == -1 ? "" : n.substring(i + 1);
     }
 }
+

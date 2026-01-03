@@ -7,11 +7,17 @@ import core.MainServer;
 
 
 public class Main {
-    public static void main(String[] args) throws Exception {
-        String cfgPath = (args.length>0)? args[0] : "config.json";
-        List<ServerConfig> Listconfigs = ConfigLoader.load(cfgPath);
-        MainServer mainServer = new MainServer(new Config(Listconfigs));
-        mainServer.start();
+    public static void main(String[] args)  {
+      try {
+          String cfgPath = (args.length>0)? args[0] : "config.json";
+          List<ServerConfig> Listconfigs = ConfigLoader.load(cfgPath);
+          MainServer mainServer = new MainServer(new Config(Listconfigs));
+          mainServer.start();
+          
+        } catch (Exception e) {
+          System.out.println("exceeeeeeeept");
+          System.out.println(e.getMessage());
+        }
     }
 }
 

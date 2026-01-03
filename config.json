@@ -59,11 +59,11 @@
             "py": "python3"
           }
         },
-        "/me": {
+        "/upload": {
           "methods": [
-            "GET"
+            "POST"
           ],
-          "root": "www",
+          "root": "upload",
           "index": "me.html",
           "dirList": true,
           "cgi": {
