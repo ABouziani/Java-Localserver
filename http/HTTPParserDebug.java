@@ -17,7 +17,7 @@ public class HTTPParserDebug {
                 "\r\n" +
                 body;
 
-        HTTPRequest req = HTTPParser.tryParse(raw);
+        HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
         if (req == null) {
             System.out.println("❌ Parser returned NULL");
@@ -65,7 +65,7 @@ public class HTTPParserDebug {
         System.out.println("Expected: 100 bytes");
         System.out.println("Actual: " + "Only 20 bytes here".length() + " bytes");
 
-        HTTPRequest req2 = HTTPParser.tryParse(raw2);
+        HTTPRequest req2 = HTTPParser.ParseHeaders(raw2);
 
         if (req2 == null) {
             System.out.println("✅ Parser returned NULL (correct - incomplete)");

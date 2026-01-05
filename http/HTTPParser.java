@@ -1,9 +1,12 @@
 package http;
 
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+
+import client.ClientState;
 
 public class HTTPParser {
 
@@ -13,7 +16,7 @@ public class HTTPParser {
     private static final int MAX_HEADERS_SIZE = 16384;
     private static final int MAX_URI_LENGTH = 8192;
 
-    public static HTTPRequest tryParse(String raw) {
+    public static HTTPRequest ParseHeaders(String raw) {
         
         int headersEnd = raw.indexOf("\r\n\r\n");
         if (headersEnd == -1) {
@@ -173,14 +176,16 @@ public class HTTPParser {
             
             if (clValue.contains(",")) {
                 String[] values = clValue.split(",");
-                String firstValue = values[0].trim();
-                
-                for (String v : values) {
-                    if (!v.trim().equals(firstValue)) {
-                        return HTTPRequest.invalid(400, "Multiple different Content-Length values");
+                if (values.length != 0){
+                    String firstValue = values[0].trim();
+                    
+                    for (String v : values) {
+                        if (!v.trim().equals(firstValue)) {
+                            return HTTPRequest.invalid(400, "Multiple different Content-Length values");
+                        }
                     }
+                    clValue = firstValue;
                 }
-                clValue = firstValue;
             }
             
             try {
@@ -193,47 +198,122 @@ public class HTTPParser {
             }
         }
 
+        HTTPRequest request = new HTTPRequest();
+        request.headers = headers;
+        request.version = version;
+        request.method = method;
+        request.path = rawPath;
+        request.valid = true;
+        return request;
+        // String body = null;
+        // String remaining = "";
+        // int bodyStart = headersEnd + 4;
+        // String bodyData = raw.substring(bodyStart);
         
-        String body = null;
-        String remaining = "";
-        int bodyStart = headersEnd + 4;
-        String bodyData = raw.substring(bodyStart);
+        // if (method.equals("POST") || method.equals("PUT")) {
+            
+        //     if (!isChunked && contentLength == -1) {
+        //         return HTTPRequest.invalid(411, "POST requires Content-Length or Transfer-Encoding: chunked");
+        //     }
+            
+        //     if (isChunked) {
+        //         ChunkResult result = parseChunkedBody(bodyData);
+        //         if (result == null) {
+        //             return null; 
+        //         }
+                
+        //         body = result.body;
+        //         remaining = result.remaining;
+                
+        //         if (body.length() > CLIENT_MAX_BODY) {
+        //             return HTTPRequest.invalid(413, "Request body too large");
+        //         }
+                
+        //     } else {
+        //         if (contentLength > CLIENT_MAX_BODY) {
+        //             return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
+        //         }
+                
+        //         if (bodyData.length() < contentLength) {
+        //             return null; 
+        //         }
+                
+        //         body = bodyData.substring(0, (int) contentLength);
+        //         remaining = bodyData.substring((int) contentLength);
+        //     }
+            
+        // } else {
+        //     body = null;
+        //     remaining = bodyData;
+            
+        //     if (isChunked || contentLength > 0) {
+        //         return HTTPRequest.invalid(400, method + " request must not have a body");
+        //     }
+        // }
+
         
-        if (method.equals("POST") || method.equals("PUT")) {
+        
+        // request.method = method;
+        
+        // try {
+        //     request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
+        // } catch (Exception e) {
+        //     request.path = rawPath;
+        // }
+        
+        // // request.version = version;
+        // // request.headers = headers;
+        // request.body = body;
+        // request.valid = true;
+        // request.remain = remaining;
+        
+        // return request;
+    }
+
+    public static HTTPRequest complateRequest(ClientState state) throws IOException{
+        // String body = null;
+        // String remaining = "";
+        // int bodyStart = state.indexOfHeadersEnd;
+        String method = state.request.method;
+        Boolean isChunked = state.chunked;
+        Long contentLength = state.expectedLength;
+        
+
+        if (method.equals("POST")) {
             
             if (!isChunked && contentLength == -1) {
                 return HTTPRequest.invalid(411, "POST requires Content-Length or Transfer-Encoding: chunked");
             }
             
             if (isChunked) {
-                ChunkResult result = parseChunkedBody(bodyData);
-                if (result == null) {
+                state.handleChunkedBody();
+                if (state.currentChunkSize == -1) {
                     return null; 
                 }
                 
-                body = result.body;
-                remaining = result.remaining;
+                // body = result.body;
+                // remaining = result.remaining;
                 
-                if (body.length() > CLIENT_MAX_BODY) {
-                    return HTTPRequest.invalid(413, "Request body too large");
-                }
+                // if (body.length() > CLIENT_MAX_BODY) {
+                //     return HTTPRequest.invalid(413, "Request body too large");
+                // }
                 
             } else {
                 if (contentLength > CLIENT_MAX_BODY) {
                     return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
                 }
-                
-                if (bodyData.length() < contentLength) {
+                state.handleContentLengthBody();
+                if (state.receivedLength < contentLength) {
                     return null; 
                 }
                 
-                body = bodyData.substring(0, (int) contentLength);
-                remaining = bodyData.substring((int) contentLength);
+                // body = bodyData.substring(0, (int) contentLength);
+                // remaining = bodyData.substring((int) contentLength);
             }
             
         } else {
-            body = null;
-            remaining = bodyData;
+            // body = null;
+            // remaining = bodyData;
             
             if (isChunked || contentLength > 0) {
                 return HTTPRequest.invalid(400, method + " request must not have a body");
@@ -241,25 +321,23 @@ public class HTTPParser {
         }
 
         
-        HTTPRequest request = new HTTPRequest();
         
-        request.method = method;
+        // request.method = method;
         
-        try {
-            request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            request.path = rawPath;
-        }
+        // try {
+        //     state.request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
+        // } catch (Exception e) {
+        //     request.path = rawPath;
+        // }
         
-        request.version = version;
-        request.headers = headers;
-        request.body = body;
-        request.valid = true;
-        request.remain = remaining;
+        // request.version = version;
+        // request.headers = headers;
+        // request.body = body;
+        state.request.valid = true;
+        // request.remain = remaining;
         
-        return request;
+        return state.request;
     }
-
     
     private static boolean isValidMethod(String method) {
         if (method.isEmpty()) return false;

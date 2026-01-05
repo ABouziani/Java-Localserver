@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import cgi.CGIHandler;
+import client.ClientState;
 import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
@@ -20,16 +21,16 @@ public class Router {
         this.cfg = cfg;
     }
 
-    public HTTPResponse route(HTTPRequest req, Session sess, CGIHandler cgi) throws IOException {
+    public HTTPResponse route(ClientState state, Session sess, CGIHandler cgi) throws IOException {
         // basic validation
-        if (!req.valid)
+        if (!state.request.valid)
             return HTTPResponse.error(400, cfg);
         // find route by prefix (simple longest match)
         Route matched = null;
         String matchedPath = "";
         for (var en : cfg.getRoutes().entrySet()) {
             String p = en.getKey();
-            if (req.path.startsWith(p) && p.length() >= matchedPath.length()) {
+            if (state.request.path.startsWith(p) && p.length() >= matchedPath.length()) {
                 matched = en.getValue();
                 matchedPath = p;
             }
@@ -43,12 +44,12 @@ public class Router {
         if (matched.redirect != null) {
             return HTTPResponse.redirect(matched.redirect);
         }
-        if (!matched.methods.isEmpty() && !matched.methods.contains(req.method)) {
+        if (!matched.methods.isEmpty() && !matched.methods.contains(state.request.method)) {
             return HTTPResponse.error(405, cfg);
         }
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
-        String rel = req.path.substring(matchedPath.length());
+        String rel = state.request.path.substring(matchedPath.length());
         if (rel.equals("") || rel.equals("/"))
             rel = "/" + matched.index;
         Path target = fsroot.resolve(rel.substring(1)).normalize();
@@ -69,11 +70,11 @@ public class Router {
         String ext = getExt(f.getName());
         if (matched.cgi.containsKey(ext) || cfg.getRoutes().values().stream().anyMatch(r -> r.cgi.containsKey(ext))) {
             // run cgi
-            return cgi.execute(req, f);
+            return cgi.execute(state.request, f);
         }
         // methods: GET -> serve file, DELETE -> delete file, POST -> accept upload if
         // multipart
-        switch (req.method) {
+        switch (state.request.method) {
             case "GET":
                 return HTTPResponse.serveFile(f, true);
             case "DELETE":
@@ -82,19 +83,30 @@ public class Router {
                 else
                     return HTTPResponse.error(500, cfg);
             case "POST": // naive upload: if body present and content-type multipart/form-data
-                String ct = req.headers.getOrDefault("content-type", "");
+                String ct = state.request.headers.getOrDefault("content-type", "");
                 // System.out.println(ct);
                 if (ct.startsWith("multipart/form-data")) {
-                    MultipartForm mf = MultipartForm.parse(req);
-                    // System.out.print(req.body);
-                    for (var part : mf.files) {
-                        System.out.println("5555555555555555555555");
-                        Path out = Paths.get(matched.root, part.filename).normalize();
-                        Files.write(out, part.data);
+                    // MultipartForm mf = MultipartForm.parse(req);
+                    // // System.out.print(req.body);
+                    // for (var part : mf.files) {
+                    // System.out.println("5555555555555555555555");
+                    // Path out = Paths.get(matched.root, part.filename).normalize();
+                    // Path parent = out.getParent();
+                    // if (parent != null) {
+                    // Files.createDirectories(parent);
+                    // }
+                    // Files.write(out, part.data);
+                    // }
+                    if (state.tempFile != null && Files.exists(state.tempFile)) {
+                        // serve the uploaded file
+                        return HTTPResponse.serveFile(state.tempFile.toFile(), true);
                     }
-                    return HTTPResponse.simple(200, "Uploaded");
+
+                    // fallback: no file uploaded
+                    return HTTPResponse.simple(200, "No data uploaded");
+                    // return HTTPResponse.simple(200, "Uploaded");
                 }
-                return HTTPResponse.simple(200, req.body != null ? req.body : "");
+                return HTTPResponse.simple(200, state.request.body != null ? state.request.body : "");
             default:
                 return HTTPResponse.error(405, cfg);
         }
@@ -105,4 +117,3 @@ public class Router {
         return i == -1 ? "" : n.substring(i + 1);
     }
 }
-

@@ -37,7 +37,7 @@ public class HTTPParserTests {
                                 "Accept: application/json\r\n" +
                                 "\r\n";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null &&
                                 req.valid &&
@@ -60,7 +60,7 @@ public class HTTPParserTests {
                                 "\r\n" +
                                 body;
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null &&
                                 req.valid &&
@@ -79,7 +79,7 @@ public class HTTPParserTests {
                                 "Authorization: Bearer token123\r\n" +
                                 "\r\n";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null &&
                                 req.valid &&
@@ -95,7 +95,7 @@ public class HTTPParserTests {
                 String raw = "GET /test HTTP/1.1\r\n" +
                                 "Host: example.com\r\n";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req == null;
 
@@ -109,7 +109,7 @@ public class HTTPParserTests {
                                 "\r\n" +
                                 "Only 20 bytes here";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req == null;
 
@@ -121,7 +121,7 @@ public class HTTPParserTests {
                                 "Host: example.com\r\n" +
                                 "\r\n";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null && !req.valid;
 
@@ -133,7 +133,7 @@ public class HTTPParserTests {
                                 "Host: example.com\r\n" +
                                 "\r\n";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null && !req.valid;
 
@@ -146,7 +146,7 @@ public class HTTPParserTests {
                                 "\r\n" +
                                 "{\"data\":\"test\"}";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null && !req.valid;
 
@@ -160,7 +160,7 @@ public class HTTPParserTests {
                                 "\r\n" +
                                 "some data!";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null && !req.valid;
 
@@ -173,7 +173,7 @@ public class HTTPParserTests {
                                 "Content-Length: -100\r\n" +
                                 "\r\n";
 
-                HTTPRequest req = HTTPParser.tryParse(raw);
+                HTTPRequest req = HTTPParser.ParseHeaders(raw);
 
                 boolean pass = req != null && !req.valid;
 

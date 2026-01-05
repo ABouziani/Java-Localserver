@@ -56,7 +56,7 @@ public class MainServer {
         SocketChannel clientChannel = serverChannel.accept();
         if (clientChannel == null)
             return;
- 
+
         try {
             clientChannel.configureBlocking(false);
 
@@ -68,7 +68,7 @@ public class MainServer {
             clients.put(clientChannel, state);
 
             SelectionKey clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
-            clientKey.attach(state); 
+            clientKey.attach(state);
         } catch (IOException e) {
             closeClient(clientChannel);
             throw e;
@@ -82,50 +82,104 @@ public class MainServer {
             // handle on the write also
             closeClient(channel);
             return;
-        }  
+        }
         // Parse port from socketChannel to determine which VirtualServer to use
         int r = channel.read(state.readBuf);
+        System.out.println("----------------000000");
         if (r == -1) {
             closeClient(channel);
             return;
         }
         state.lastActive = System.currentTimeMillis();
         state.readBuf.flip();
-        byte[] b = new byte[state.readBuf.remaining()];
-        state.readBuf.get(b);
+        byte[] chunk = new byte[state.readBuf.remaining()];
+        state.readBuf.get(chunk);
         state.readBuf.clear();
-        state.in.append(new String(b, StandardCharsets.UTF_8));
-        VirtualServer server = null;
-        while (true) {
-            HTTPRequest req = HTTPParser.tryParse(state.in.toString());
-            if (req == null)
-                break;
+
+        // state.in.append(new String(b, StandardCharsets.UTF_8));
+        byte[] newData = new byte[state.in.length + chunk.length];
+        System.arraycopy(state.in, 0, newData, 0, state.in.length);
+        System.arraycopy(chunk, 0, newData, state.in.length, chunk.length);
+
+        state.in = newData;
+
+        if (!state.headersParsed) {
+            String headrsString = state.getHeaderString();
+            if (headrsString == null)
+                return;
+            HTTPRequest req = HTTPParser.ParseHeaders(headrsString);
+            if (req == null)return;
             if (req.valid == false) {
                 HTTPResponse resp = new HTTPResponse();
                 resp.keepAlive = false;
-                System.out.print(req.errorCode);
-                resp.body = req.getErrorResponse();
+                System.out.print(state.request.errorCode);
+                resp.body = state.request.getErrorResponse();
                 resp.headers.put("Content-Type", "text/html; charset=utf-8");
                 resp.headers.put("Content-Length", Integer.toString(resp.body.getBytes().length));
                 state.pending.add(resp);
                 channel.register(selector, SelectionKey.OP_WRITE);
                 return;
             }
+
             state.setCurrentRequest(req);
-            state.in = new StringBuilder(req.remain);
-            if (server == null) {
-                String host = req.headers.get("host");
-                server = serverManager.getServer(host);
-                if (server == null) {
-                    System.err.println("Warning: No server found for address " + host +
-                    "");
-                    break;
+            state.headersParsed = true;
+            if (req.method.equals("POST")) {
+                String te = state.request.headers.get("transfer-encoding");
+                String cl = state.request.headers.get("content-length");
+    
+                if ("chunked".equalsIgnoreCase(te)) {
+                    state.chunked = true;
+                    state.openTempFile();
+                } else if (cl != null) {
+                    state.expectedLength = Long.parseLong(cl);
+                    state.openTempFile();
                 }
-                state.setListenAddress(host);
-                state.setListenAddress(host);
             }
-            server.read(req, state, channel);
         }
+
+        VirtualServer server = null;
+        // while (true) {
+        // System.out.println("----------------111111111");
+        // if (req == null)
+        // break;
+        // System.out.println("----------------2222222222");
+        if (state.request.valid == false) {
+            HTTPResponse resp = new HTTPResponse();
+            resp.keepAlive = false;
+            System.out.print(state.request.errorCode);
+            resp.body = state.request.getErrorResponse();
+            resp.headers.put("Content-Type", "text/html; charset=utf-8");
+            resp.headers.put("Content-Length", Integer.toString(resp.body.getBytes().length));
+            state.pending.add(resp);
+            channel.register(selector, SelectionKey.OP_WRITE);
+            return;
+        }
+        // state.setCurrentRequest(req);
+        // state.in = new StringBuilder(state.request.remain);
+        if (server == null) {
+            String host = state.request.headers.get("host");
+            server = serverManager.getServer(host);
+            if (server == null) {
+                System.err.println("Warning: No server found for address " + host +
+                        "");
+                closeClient(channel);
+                return;
+            }
+            state.setListenAddress(host);
+        }
+        // if (state.chunked)
+        //     state.handleChunkedBody();
+        // else if (state.expectedLength >= 0)
+        //     state.handleContentLengthBody();
+
+        // when finished
+        // if (state.expectedLength == state.receivedLength && !state.chunked) {
+        //     System.out.println("Upload saved to " + state.tempFile);
+        // }
+        HTTPRequest req = HTTPParser.complateRequest(state);
+        if (req == null) return;
+        server.read(state, channel);
+        // }
 
     }
 

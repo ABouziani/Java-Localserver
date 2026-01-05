@@ -52,13 +52,13 @@ public class VirtualServer {
         this.cgiHandler = new CGIHandler(config);
     }
 
-    public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
-        if (req.body != null && req.body.length() > config.getClientMaxBody()) {
+    public void read(ClientState state, SocketChannel sc) throws IOException {
+        if (state.request.body != null && state.request.body.length() > config.getClientMaxBody()) {
             mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
             return;
         }
         try {
-            handleRequest(sc, req, state);
+            handleRequest(sc,state);
         } catch (Throwable t) {
             t.printStackTrace();
             mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
@@ -114,9 +114,9 @@ public class VirtualServer {
 
     }
 
-    private void handleRequest(SocketChannel sc, HTTPRequest req, ClientState state) throws IOException {
+    private void handleRequest(SocketChannel sc, ClientState state) throws IOException {
         // sessions
-        String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
+        String sid = Cookie.getCookie(state.request.headers.getOrDefault("Cookie", ""), "SID");
         Session sess = null;
         if (sid != null)
             sess = sessions.get(sid);
@@ -126,7 +126,7 @@ public class VirtualServer {
             sessions.put(sid, sess);
         }
 
-        HTTPResponse resp = router.route(req, sess, cgiHandler);
+        HTTPResponse resp = router.route(state, sess, cgiHandler);
         // set session cookie
         resp.headers.put("Set-Cookie", "SID=" + sid + "; Path=/; HttpOnly");
         mainServer.enqueueResponse(sc, resp);
