@@ -21,7 +21,7 @@ public class Router {
     }
 
     public HTTPResponse route(HTTPRequest req, Session sess, CGIHandler cgi) throws IOException {
-        
+
         // basic validation
         if (!req.valid)
             return HTTPResponse.error(400, cfg);
@@ -83,25 +83,16 @@ public class Router {
                 else
                     return HTTPResponse.error(500, cfg);
             case "POST": // naive upload: if body present and content-type multipart/form-data
-            String ct = req.headers.getOrDefault("content-type", "");
-            
-            if (ct.startsWith("multipart/form-data")) {
-                System.out.println("req.bodyBytes");
-                System.out.println(req.bodyBytes);
-                MultipartForm mf = MultipartForm.parse(req);
-                //System.out.println( mf.files.size() );
-                for (var part : mf.files) {
-                        //System.out.println("5555555555555555555555");
-                        Path out = Paths.get(matched.root, part.filename).normalize();
-                        Path parent = out.getParent();
-                        if (parent != null) {
-                            Files.createDirectories(parent);
-                        }
-                        Files.write(out, part.data);
-                    }
-                    return HTTPResponse.simple(200, "Uploaded");
+                String ct = req.headers.getOrDefault("content-type", "");
+
+                if (ct.startsWith("multipart/form-data")) {
+
+                    MultipartForm mf = MultipartForm.parse(req);
+                    mf.saveAll("upload"); // saves all uploaded files to "upload" folder
+
                 }
-                return HTTPResponse.simple(200, req.body != null ? req.body : "");
+                return HTTPResponse.simple(200, "Uploaded");
+            // return HTTPResponse.simple(200, req.body != null ? req.body : "");
             default:
                 return HTTPResponse.error(405, cfg);
         }
@@ -112,4 +103,3 @@ public class Router {
         return i == -1 ? "" : n.substring(i + 1);
     }
 }
-

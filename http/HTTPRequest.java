@@ -1,17 +1,35 @@
 package http;
 
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
 public class HTTPRequest {
 
+    // try {
+    //         tempFilePath = Files.createTempFile("upload-", ".tmp");
+    //         tempFileChannel = FileChannel.open(
+    //             tempFilePath,
+    //             StandardOpenOption.WRITE);
+    //             tempFileChannel.write(readBuf);
+    //         } catch (IOException e) {
+    //             // TODO Auto-generated catch block
+    //             e.printStackTrace();
+    //         }
+
+    public FileChannel tempFileChannel;
+    public Path tempFilePath;
+
+
+    /////////////////////////////
     public String method;
     public String path;
     public String version;
     public Map<String, String> headers = new HashMap<>();
     
-    public byte[] bodyBytes;
+    // public byte[] bodyBytes;
     
     // Legacy string body for backward compatibility (deprecated)
     @Deprecated
@@ -43,33 +61,33 @@ public class HTTPRequest {
     /**
      * Get body as String (for text content like JSON, form data, etc.)
      */
-    public String getBodyAsString() {
-        if (bodyBytes == null) {
-            return null;
-        }
-        return new String(bodyBytes, StandardCharsets.UTF_8);
-    }
+    // public String getBodyAsString() {
+    //     if (bodyBytes == null) {
+    //         return null;
+    //     }
+    //     return new String(bodyBytes, StandardCharsets.UTF_8);
+    // }
     
     /**
      * Get body as bytes (for binary content like images, files, etc.)
      */
-    public byte[] getBodyAsBytes() {
-        return bodyBytes;
-    }
+    // public byte[] getBodyAsBytes() {
+    //     return bodyBytes;
+    // }
     
     /**
      * Check if request has body
      */
-    public boolean hasBody() {
-        return bodyBytes != null && bodyBytes.length > 0;
-    }
+    // public boolean hasBody() {
+    //     return bodyBytes != null && bodyBytes.length > 0;
+    // }
     
-    /**
-     * Get body length
-     */
-    public int getBodyLength() {
-        return bodyBytes == null ? 0 : bodyBytes.length;
-    }
+    // /**
+    //  * Get body length
+    //  */
+    // public int getBodyLength() {
+    //     return bodyBytes == null ? 0 : bodyBytes.length;
+    // }
     
     public String getErrorResponse() {
         if (valid) {

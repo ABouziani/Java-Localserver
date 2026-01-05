@@ -1,14 +1,18 @@
 package http;
 
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Map;
 
 public class HTTPParser {
 
-    public static long CLIENT_MAX_BODY = 10485760; // 10MB
+    public static long CLIENT_MAX_BODY = 104857600; // 10MB
     private static final int MAX_REQUEST_LINE_LENGTH = 8192;
     private static final int MAX_HEADER_LINE_LENGTH = 8192;
     private static final int MAX_HEADERS_SIZE = 16384;
@@ -212,7 +216,7 @@ public class HTTPParser {
                     return HTTPRequest.invalid(400, "Invalid Content-Length value");
                 }
             }
-
+                
             // Parse body (keep as bytes)
             byte[] body = null;
             int bodyStartPos = buffer.position();
@@ -268,7 +272,18 @@ public class HTTPParser {
             
             request.version = version;
             request.headers = headers;
-            request.bodyBytes = body;
+            try {
+            request.tempFilePath = Files.createTempFile("upload-", ".tmp");
+            request.tempFileChannel = FileChannel.open(
+                request.tempFilePath,
+                StandardOpenOption.WRITE);
+                ByteBuffer bb = ByteBuffer.wrap(body);
+                request.tempFileChannel.write(bb);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            // request.bodyBytes = body;
             request.valid = true;
             
             return request;
