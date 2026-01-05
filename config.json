@@ -8,7 +8,7 @@
       "host": "www.exampl.com",
       "ports": [8080,8989],
       "root": "www",
-      "clientMaxBody": 10485760,
+      "clientMaxBody": 10485760000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
@@ -40,7 +40,7 @@
       "host": "www.example.com",
       "ports": [8080,8985],
       "root": "www",
-      "clientMaxBody": 10485760,
+      "clientMaxBody": 1048576000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"

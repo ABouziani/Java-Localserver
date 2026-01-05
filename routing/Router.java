@@ -21,6 +21,7 @@ public class Router {
     }
 
     public HTTPResponse route(HTTPRequest req, Session sess, CGIHandler cgi) throws IOException {
+        
         // basic validation
         if (!req.valid)
             return HTTPResponse.error(400, cfg);
@@ -82,14 +83,20 @@ public class Router {
                 else
                     return HTTPResponse.error(500, cfg);
             case "POST": // naive upload: if body present and content-type multipart/form-data
-                String ct = req.headers.getOrDefault("content-type", "");
-                // System.out.println(ct);
-                if (ct.startsWith("multipart/form-data")) {
-                    MultipartForm mf = MultipartForm.parse(req);
-                    // System.out.print(req.body);
-                    for (var part : mf.files) {
-                        System.out.println("5555555555555555555555");
+            String ct = req.headers.getOrDefault("content-type", "");
+            
+            if (ct.startsWith("multipart/form-data")) {
+                System.out.println("req.bodyBytes");
+                System.out.println(req.bodyBytes);
+                MultipartForm mf = MultipartForm.parse(req);
+                //System.out.println( mf.files.size() );
+                for (var part : mf.files) {
+                        //System.out.println("5555555555555555555555");
                         Path out = Paths.get(matched.root, part.filename).normalize();
+                        Path parent = out.getParent();
+                        if (parent != null) {
+                            Files.createDirectories(parent);
+                        }
                         Files.write(out, part.data);
                     }
                     return HTTPResponse.simple(200, "Uploaded");

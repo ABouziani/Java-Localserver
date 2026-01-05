@@ -1,5 +1,6 @@
 package http;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -9,8 +10,17 @@ public class HTTPRequest {
     public String path;
     public String version;
     public Map<String, String> headers = new HashMap<>();
+    
+    public byte[] bodyBytes;
+    
+    // Legacy string body for backward compatibility (deprecated)
+    @Deprecated
     public String body;
+    
     public boolean valid = true;
+    
+    // Not used with ByteBuffer approach
+    @Deprecated
     public String remain = "";
     
     public int errorCode = 0;
@@ -25,9 +35,40 @@ public class HTTPRequest {
         r.valid = false;
         r.errorCode = statusCode;
         r.errorMessage = message;
-        System.out.println(r.errorCode);
-        System.out.println(statusCode);
+        //System.out.println(r.errorCode);
+        //System.out.println(statusCode);
         return r;
+    }
+    
+    /**
+     * Get body as String (for text content like JSON, form data, etc.)
+     */
+    public String getBodyAsString() {
+        if (bodyBytes == null) {
+            return null;
+        }
+        return new String(bodyBytes, StandardCharsets.UTF_8);
+    }
+    
+    /**
+     * Get body as bytes (for binary content like images, files, etc.)
+     */
+    public byte[] getBodyAsBytes() {
+        return bodyBytes;
+    }
+    
+    /**
+     * Check if request has body
+     */
+    public boolean hasBody() {
+        return bodyBytes != null && bodyBytes.length > 0;
+    }
+    
+    /**
+     * Get body length
+     */
+    public int getBodyLength() {
+        return bodyBytes == null ? 0 : bodyBytes.length;
     }
     
     public String getErrorResponse() {
@@ -40,7 +81,7 @@ public class HTTPRequest {
         StringBuilder response = new StringBuilder();
         response.append("HTTP/1.1 ").append(errorCode).append(" ").append(statusText).append("\r\n");
         response.append("Content-Type: text/html; charset=utf-8\r\n");
-        response.append("Content-Length: ").append(body.getBytes().length).append("\r\n");
+        response.append("Content-Length: ").append(body.getBytes(StandardCharsets.UTF_8).length).append("\r\n");
         response.append("Connection: close\r\n");
         response.append("\r\n");
         response.append(body);

@@ -53,6 +53,7 @@ public class VirtualServer {
     }
 
     public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
+        
         if (req.body != null && req.body.length() > config.getClientMaxBody()) {
             mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
             return;
@@ -99,7 +100,7 @@ public class VirtualServer {
                 resp.fileChannel = FileChannel.open(resp.file.toPath(), StandardOpenOption.READ);
                 resp.filePos = 0;
             }
-            System.out.println(resp.file.toPath());
+            //System.out.println(resp.file.toPath());
             long transferred = resp.fileChannel.transferTo(resp.filePos, 8192, sc);
             resp.filePos += transferred;
             if (resp.filePos >= resp.file.length()) {
@@ -115,6 +116,7 @@ public class VirtualServer {
     }
 
     private void handleRequest(SocketChannel sc, HTTPRequest req, ClientState state) throws IOException {
+        
         // sessions
         String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
         Session sess = null;

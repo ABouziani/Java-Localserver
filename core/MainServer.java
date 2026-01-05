@@ -6,6 +6,7 @@ import http.HTTPParser;
 import http.HTTPRequest;
 import http.HTTPResponse;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -59,11 +60,6 @@ public class MainServer {
  
         try {
             clientChannel.configureBlocking(false);
-
-            // Optional: configure socket options
-            // clientChannel.socket().setTcpNoDelay(true);
-            // clientChannel.socket().setKeepAlive(true);
-
             ClientState state = new ClientState(clientChannel);
             clients.put(clientChannel, state);
 
@@ -74,60 +70,121 @@ public class MainServer {
             throw e;
         }
     }
-
     private void handleRead(SelectionKey key) throws IOException {
-        SocketChannel channel = (SocketChannel) key.channel();
-        ClientState state = clients.get(channel);
-        if (System.currentTimeMillis() - state.lastActive >= 20000) {
-            // handle on the write also
-            closeClient(channel);
-            return;
-        }  
-        // Parse port from socketChannel to determine which VirtualServer to use
-        int r = channel.read(state.readBuf);
-        if (r == -1) {
+    SocketChannel channel = (SocketChannel) key.channel();
+    ClientState state = clients.get(channel);
+
+    try {
+        int bytesRead = channel.read(state.readBuf);
+        
+        if (bytesRead == -1) {
             closeClient(channel);
             return;
         }
+        
+        if (bytesRead == 0) {
+            return;
+        }
+        
         state.lastActive = System.currentTimeMillis();
-        state.readBuf.flip();
-        byte[] b = new byte[state.readBuf.remaining()];
-        state.readBuf.get(b);
-        state.readBuf.clear();
-        state.in.append(new String(b, StandardCharsets.UTF_8));
+        
+        state.appendToAccumulation();
+        
+        ByteBuffer parseBuf = state.getAccumulationForParsing();
+        
         VirtualServer server = null;
-        while (true) {
-            HTTPRequest req = HTTPParser.tryParse(state.in.toString());
-            if (req == null)
+        boolean continueProcessing = true;
+        
+        while (continueProcessing && parseBuf.hasRemaining()) {
+            
+            HTTPRequest req = HTTPParser.tryParse(parseBuf);
+            
+            if (req == null) {
+         
+                continueProcessing = false;
                 break;
-            if (req.valid == false) {
+            }
+            
+            if (!req.valid) {
                 HTTPResponse resp = new HTTPResponse();
+                resp.status = req.errorCode;
                 resp.keepAlive = false;
-                System.out.print(req.errorCode);
                 resp.body = req.getErrorResponse();
                 resp.headers.put("Content-Type", "text/html; charset=utf-8");
-                resp.headers.put("Content-Length", Integer.toString(resp.body.getBytes().length));
+                resp.headers.put("Content-Length", String.valueOf(resp.body.getBytes(StandardCharsets.UTF_8).length));
+                
                 state.pending.add(resp);
                 channel.register(selector, SelectionKey.OP_WRITE);
+                
+                state.clearAccumulation();
                 return;
             }
-            state.setCurrentRequest(req);
-            state.in = new StringBuilder(req.remain);
+            
+              state.setCurrentRequest(req);
+            
             if (server == null) {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
+                
                 if (server == null) {
-                    System.err.println("Warning: No server found for address " + host +
-                    "");
-                    break;
+                    System.err.println("Warning: No server found for host: " + host);
+                    
+                    HTTPResponse resp = new HTTPResponse();
+                    resp.status = 404;
+                    resp.keepAlive = false;
+                    resp.body = "<html><body><h1>404 Not Found</h1></body></html>";
+                    resp.headers.put("Content-Type", "text/html");
+                    resp.headers.put("Content-Length", String.valueOf(resp.body.length()));
+                    state.pending.add(resp);
+                    channel.register(selector, SelectionKey.OP_WRITE);
+                    state.clearAccumulation();
+                    return;
                 }
-                state.setListenAddress(host);
+                
                 state.setListenAddress(host);
             }
+            
             server.read(req, state, channel);
+            
+            String connection = req.headers.getOrDefault("connection", "keep-alive").toLowerCase();
+            if (connection.equals("close")) {
+                continueProcessing = false;
+            }
         }
-
+        
+        state.compactAccumulation();
+        
+        state.resetAccumulationIfLarge();
+        
+        if (state.getAccumulationSize() > 1024 * 1024) {  // > 1MB
+            System.out.println("WARNING: Large accumulation buffer: " + 
+                             state.getAccumulationSize() + " bytes for " + 
+                             channel.getRemoteAddress());
+        }
+        
+    } catch (RuntimeException e) {
+        System.err.println("ERROR: Failed to process request: " + e.getMessage());
+        e.printStackTrace();
+        HTTPResponse resp = new HTTPResponse();        
+        if (e.getMessage().contains("exceeds maximum")) {
+            resp.status = 413;
+            resp.body = "<html><body><h1>413 Payload Too Large</h1><p>Request size exceeds the maximum allowed size.</p></body></html>";
+        } else {
+            resp.status = 500;
+            resp.body = "<html><body><h1>500 Internal Server Error</h1><p>An error occurred while processing your request.</p></body></html>";
+        }
+        resp.keepAlive = false;
+        resp.headers.put("Content-Type", "text/html");
+        resp.headers.put("Content-Length", String.valueOf(resp.body.length()));
+        
+        state.pending.add(resp);
+        channel.register(selector, SelectionKey.OP_WRITE);
+        state.clearAccumulation();
+    } catch (IOException e) {
+        System.err.println("ERROR: IO exception during read: " + e.getMessage());
+        closeClient(channel);
     }
+}
 
     private void handleWrite(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();

@@ -15,7 +15,6 @@ public class Main {
           mainServer.start();
           
         } catch (Exception e) {
-          System.out.println("exceeeeeeeept");
           System.out.println(e.getMessage());
         }
     }
