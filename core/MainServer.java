@@ -94,14 +94,14 @@ public class MainServer {
         state.readBuf.flip();
         byte[] chunk = new byte[state.readBuf.remaining()];
         state.readBuf.get(chunk);
-        state.readBuf.clear();
-
+        
         // state.in.append(new String(b, StandardCharsets.UTF_8));
-        byte[] newData = new byte[state.in.length + chunk.length];
-        System.arraycopy(state.in, 0, newData, 0, state.in.length);
-        System.arraycopy(chunk, 0, newData, state.in.length, chunk.length);
-
-        state.in = newData;
+        // byte[] newData = new byte[state.in.length + chunk.length];
+        // System.arraycopy(state.in, 0, newData, 0, state.in.length);
+        // System.arraycopy(chunk, 0, newData, state.in.length, chunk.length);
+        
+        state.readBuf.clear();
+        state.in.write(state.readBuf.array());
 
         if (!state.headersParsed) {
             String headrsString = state.getHeaderString();

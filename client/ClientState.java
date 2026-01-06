@@ -1,5 +1,7 @@
 package client;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -19,7 +21,7 @@ public class ClientState {
     public SocketChannel ch;
     public ByteBuffer readBuf = ByteBuffer.allocateDirect(8 * 1024);
     public ByteBuffer writeBuf = null;
-    public byte[] in = new byte[0];
+    public ByteArrayOutputStream in = new ByteArrayOutputStream();
     public Queue<HTTPResponse> pending = new ArrayDeque<>();
     public long lastActive = System.currentTimeMillis();
     public boolean closed = false;
@@ -44,12 +46,13 @@ public class ClientState {
     }
 
     public int indexOfHeadersEnd() {
-        // byte[] target = "\r\n\r\n".getBytes();
-        for (int i = 0; i <= this.in.length - 4; i++) {
-            if (this.in[i] == '\r' &&
-                    this.in[i + 1] == '\n' &&
-                    this.in[i + 2] == '\r' &&
-                    this.in[i + 3] == '\n') {
+        byte[] target = this.in.toByteArray();
+
+        for (int i = 0; i <= target.length - 4; i++) {
+            if (target[i] == '\r' &&
+                    target[i + 1] == '\n' &&
+                    target[i + 2] == '\r' &&
+                    target[i + 3] == '\n') {
                 this.indexOfHeadersEnd = i + 4;
                 return i + 4;
             }
@@ -68,10 +71,10 @@ public class ClientState {
     }
 
     public void handleContentLengthBody() throws IOException {
-        int bodyBytes = this.in.length - this.indexOfHeadersEnd;
+        int bodyBytes = this.in.size() - this.indexOfHeadersEnd;
         int toWrite = (int) Math.min(this.expectedLength - this.receivedLength, bodyBytes);
 
-        this.fileOut.write(ByteBuffer.wrap(this.in, this.indexOfHeadersEnd, toWrite));
+        this.fileOut.write(ByteBuffer.wrap(this.in.toByteArray(), this.indexOfHeadersEnd, toWrite));
         this.receivedLength += toWrite;
     }
 
@@ -79,14 +82,14 @@ public class ClientState {
         // minimal chunk processor (no extensions)
         int i = this.indexOfHeadersEnd;
 
-        while (i < this.in.length) {
+        while (i < this.in.size()) {
 
             if (this.currentChunkSize == -1) {
-                int lineEnd = findCRLF(this.in, i);
+                int lineEnd = findCRLF(this.in.toByteArray(), i);
                 if (lineEnd == -1)
                     return;
 
-                String hex = new String(this.in, i, lineEnd - i, java.nio.charset.StandardCharsets.US_ASCII);
+                String hex = new String(this.in.toByteArray(), i, lineEnd - i, java.nio.charset.StandardCharsets.US_ASCII);
                 this.currentChunkSize = Integer.parseInt(hex.trim(), 16);
                 i = lineEnd + 2;
 
@@ -97,10 +100,10 @@ public class ClientState {
                 }
             }
 
-            int remaining = this.in.length - i;
+            int remaining = this.in.size() - i;
             int toWrite = Math.min(this.currentChunkSize, remaining);
 
-            this.fileOut.write(ByteBuffer.wrap(this.in, i, toWrite));
+            this.fileOut.write(ByteBuffer.wrap(this.in.toByteArray(), i, toWrite));
             this.currentChunkSize -= toWrite;
             i += toWrite;
 
