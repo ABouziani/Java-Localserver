@@ -1,5 +1,7 @@
 package client;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayDeque;
@@ -12,7 +14,9 @@ public class ClientState {
     public SocketChannel ch;
     
     public ByteBuffer readBuf = ByteBuffer.allocateDirect(8 * 1024);
-    public ByteBuffer accumulationBuf = ByteBuffer.allocate(16 * 1024);
+    public ByteArrayOutputStream allData = new ByteArrayOutputStream();
+    public ByteBuffer accumulationBuf =  ByteBuffer.allocateDirect(1024*1000);
+
     public ByteBuffer writeBuf = null;
     
     @Deprecated
@@ -36,17 +40,16 @@ public class ClientState {
         this.ch = ch;
     }
     
-    public void appendToAccumulation() {
+    public void appendToAccumulation() throws IOException {
         readBuf.flip();
-        
-        if (accumulationBuf.remaining() < readBuf.remaining()) {
-            growAccumulationBuffer(readBuf.remaining());
-        }
-        
-        accumulationBuf.put(readBuf);
+
+        byte[] tmp = new byte[readBuf.remaining()];
+        readBuf.get(tmp);            
+        allData.write(tmp);    
+
         readBuf.clear();
     }
-    
+ 
     private void growAccumulationBuffer(int additionalSpace) {
         int currentSize = accumulationBuf.position();
         int currentCapacity = accumulationBuf.capacity();
@@ -73,7 +76,8 @@ public class ClientState {
     }
     
     public ByteBuffer getAccumulationForParsing() {
-        accumulationBuf.flip();
+        byte[] data = allData.toByteArray();
+        this.accumulationBuf = ByteBuffer.wrap(data);
         return accumulationBuf;
     }
     
@@ -86,7 +90,7 @@ public class ClientState {
         headersParsed = false; // Reset flag when clearing
         currentRequest = null;
     }
-    
+ 
     public int getAccumulationSize() {
         return accumulationBuf.position();
     }

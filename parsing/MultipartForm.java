@@ -34,6 +34,7 @@ public class MultipartForm {
             if (hEnd == -1)
                 continue;
             String hdr = ch.substring(0, hEnd);
+            if (hEnd +4 > ch.length() -2) continue;
             String data = ch.substring(hEnd + 4, ch.length() - 2);
             String fn = null;
             String name = null;
