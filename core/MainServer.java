@@ -70,7 +70,7 @@ public class MainServer {
             throw e;
         }
     }
-  private void handleRead(SelectionKey key) throws IOException {
+ private void handleRead(SelectionKey key) throws IOException {
     SocketChannel channel = (SocketChannel) key.channel();
     ClientState state = clients.get(channel);
 
@@ -89,24 +89,28 @@ public class MainServer {
         state.lastActive = System.currentTimeMillis();
         state.appendToAccumulation();
         
-        ByteBuffer parseBuf = state.getAccumulationForParsing();
-        
         VirtualServer server = null;
         boolean continueProcessing = true;
         
-        while (continueProcessing && parseBuf.hasRemaining()) {
+        while (continueProcessing && state.hasAccumulatedData()) {
+            
+            byte[] allBytes = state.allData.toByteArray();
+            int offset = state.getConsumedBytes();
+            int available = allBytes.length - offset;
             
             HTTPRequest req = state.getCurrentRequest();
             
             // STEP 1: Parse headers (ila ma parsinhomch deja)
             if (!state.areHeadersParsed()) {
-                req = HTTPParser.parseHeaders(parseBuf);
+                HTTPParser.ParseResult headerResult = HTTPParser.parseHeaders(allBytes, offset, available);
                 
-                if (req == null) {
+                if (!headerResult.complete) {
                     // Headers mazal incomplete
                     continueProcessing = false;
                     break;
                 }
+                
+                req = headerResult.request;
                 
                 if (!req.valid) {
                     // Error f headers
@@ -117,27 +121,38 @@ public class MainServer {
                 // Headers parsed successfully!
                 state.setCurrentRequest(req);
                 state.setHeadersParsed(true);
-                System.out.println("DEBUG: Headers parsed, waiting for body...");
+                state.markConsumed(headerResult.bytesConsumed);
+                
+                System.out.println("DEBUG: Headers parsed, consumed " + headerResult.bytesConsumed + " bytes");
             }
             
             // STEP 2: Parse body (headers deja parsed)
-            Boolean bodyResult = HTTPParser.parseBody(req, parseBuf);
+            allBytes = state.allData.toByteArray();
+            offset = state.getConsumedBytes();
+            available = allBytes.length - offset;
             
-            if (bodyResult == null) {
-                // Error f body
-                sendErrorResponse(state, channel, req);
-                return;
-            }
+            HTTPParser.ParseResult bodyResult = HTTPParser.parseBody(req, allBytes, offset, available);
             
-            if (!bodyResult) {
-                // Body mazal incomplete, khassna ntsennaw
+            if (!bodyResult.complete) {
+                // Body mazal incomplete
                 continueProcessing = false;
                 System.out.println("DEBUG: Body incomplete, waiting for more data...");
                 break;
             }
             
+            req = bodyResult.request;
+            
+            if (!req.valid) {
+                // Error f body
+                sendErrorResponse(state, channel, req);
+                return;
+            }
+            
+            // Mark consumed bytes (body)
+            state.markConsumed(bodyResult.bytesConsumed);
+            
             // Request kamel! (headers + body)
-            System.out.println("DEBUG: Request complete!");
+            System.out.println("DEBUG: Request complete! Consumed " + bodyResult.bytesConsumed + " bytes for body");
             state.setHeadersParsed(false); // Reset for next request
             
             if (server == null) {
@@ -170,8 +185,15 @@ public class MainServer {
             }
         }
         
+        // Compact: remove consumed data
         state.compactAccumulation();
         state.resetAccumulationIfLarge();
+        
+        if (state.getAccumulationSize() > 1024 * 1024) {
+            System.out.println("WARNING: Large accumulation buffer: " + 
+                             state.getAccumulationSize() + " bytes for " + 
+                             channel.getRemoteAddress());
+        }
         
     } catch (RuntimeException e) {
         System.err.println("ERROR: Failed to process request: " + e.getMessage());
@@ -179,10 +201,10 @@ public class MainServer {
         HTTPResponse resp = new HTTPResponse();        
         if (e.getMessage().contains("exceeds maximum")) {
             resp.status = 413;
-            resp.body = "<html><body><h1>413 Payload Too Large</h1></body></html>";
+            resp.body = "<html><body><h1>413 Payload Too Large</h1><p>Request size exceeds the maximum allowed size.</p></body></html>";
         } else {
             resp.status = 500;
-            resp.body = "<html><body><h1>500 Internal Server Error</h1></body></html>";
+            resp.body = "<html><body><h1>500 Internal Server Error</h1><p>An error occurred while processing your request.</p></body></html>";
         }
         resp.keepAlive = false;
         resp.headers.put("Content-Type", "text/html");
@@ -196,7 +218,6 @@ public class MainServer {
         closeClient(channel);
     }
 }
-
 // Helper method
 private void sendErrorResponse(ClientState state, SocketChannel channel, HTTPRequest req) throws IOException {
     HTTPResponse resp = new HTTPResponse();

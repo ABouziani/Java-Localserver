@@ -1,7 +1,6 @@
 package client;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayDeque;
@@ -13,100 +12,145 @@ import http.HTTPResponse;
 public class ClientState {
     public SocketChannel ch;
     
+    // Read buffer for socket reads (fixed size 8KB)
     public ByteBuffer readBuf = ByteBuffer.allocateDirect(8 * 1024);
+    
+    // Accumulation for incoming data (grows automatically)
     public ByteArrayOutputStream allData = new ByteArrayOutputStream();
-    public ByteBuffer accumulationBuf =  ByteBuffer.allocateDirect(1);
-
+    
+    // Write buffer
     public ByteBuffer writeBuf = null;
     
+    // Legacy string buffer (deprecated)
     @Deprecated
     public StringBuilder in = new StringBuilder();
     
+    // Response queue
     public Queue<HTTPResponse> pending = new ArrayDeque<>();
     
+    // Connection state
     public long lastActive = System.currentTimeMillis();
     public boolean closed = false;
     
-    // Request being built
+    // Current request and server info
     private HTTPRequest currentRequest;
     private String listenAddress;
     
     // NEW: Flag to track if headers are already parsed
     private boolean headersParsed = false;
     
-    private static final int MAX_ACCUMULATION_SIZE = 10 * 1024 * 1024;
+    // Position marker for parsing (how much we already consumed)
+    private int consumedBytes = 0;
+    
+    // Buffer size limits
+    private static final int MAX_ACCUMULATION_SIZE = 10*100 * 1024 * 1024; // 10MB max
     
     public ClientState(SocketChannel ch) {
         this.ch = ch;
     }
     
-    public void appendToAccumulation() throws IOException {
+    /**
+     * Append data from readBuf to allData
+     */
+    public void appendToAccumulation() {
         readBuf.flip();
-
-        byte[] tmp = new byte[readBuf.remaining()];
-        readBuf.get(tmp);            
-        allData.write(tmp);    
-
-        readBuf.clear();
-    }
- 
-    private void growAccumulationBuffer(int additionalSpace) {
-        int currentSize = accumulationBuf.position();
-        int currentCapacity = accumulationBuf.capacity();
-        int neededCapacity = currentSize + additionalSpace;
         
-        int newCapacity = Math.max(currentCapacity * 2, neededCapacity);
-        
-        if (newCapacity > MAX_ACCUMULATION_SIZE) {
-            newCapacity = MAX_ACCUMULATION_SIZE;
-        }
-        
-        if (neededCapacity > MAX_ACCUMULATION_SIZE) {
+        // Check size limit
+        if (allData.size() + readBuf.remaining() > MAX_ACCUMULATION_SIZE) {
+            readBuf.clear();
             throw new RuntimeException("Request size exceeds maximum allowed: " + MAX_ACCUMULATION_SIZE);
         }
         
-        ByteBuffer newBuf = ByteBuffer.allocate(newCapacity);
+        // Write to ByteArrayOutputStream
+        byte[] data = new byte[readBuf.remaining()];
+        readBuf.get(data);
+        allData.write(data, 0, data.length);
         
-        accumulationBuf.flip();
-        newBuf.put(accumulationBuf);
-        
-        accumulationBuf = newBuf;
-        
-        System.out.println("DEBUG: Accumulation buffer grown to " + newCapacity + " bytes");
+        readBuf.clear();
     }
     
+    /**
+     * Get ByteBuffer for parsing (view of unconsumed data)
+     */
     public ByteBuffer getAccumulationForParsing() {
-        byte[] data = allData.toByteArray();
-        this.accumulationBuf = ByteBuffer.wrap(data);
-        return accumulationBuf;
+        byte[] allBytes = allData.toByteArray();
+        
+        // Create ByteBuffer starting from consumedBytes position
+        ByteBuffer buf = ByteBuffer.wrap(allBytes, consumedBytes, allBytes.length - consumedBytes);
+        
+        return buf;
     }
     
+    /**
+     * Mark how many bytes we consumed from the buffer after parsing
+     */
+    public void markConsumed(int bytesConsumed) {
+        consumedBytes += bytesConsumed;
+    }
+    
+    /**
+     * Compact - remove consumed data and keep unconsumed data
+     */
     public void compactAccumulation() {
-        accumulationBuf.compact();
+        if (consumedBytes == 0) {
+            return; // Nothing to compact
+        }
+        
+        byte[] allBytes = allData.toByteArray();
+        int remaining = allBytes.length - consumedBytes;
+        
+        if (remaining > 0) {
+            // Keep unconsumed data
+            allData.reset();
+            allData.write(allBytes, consumedBytes, remaining);
+        } else {
+            // Everything consumed
+            allData.reset();
+        }
+        
+        consumedBytes = 0;
     }
     
+    /**
+     * Clear accumulation buffer completely
+     */
     public void clearAccumulation() {
-        accumulationBuf.clear();
-        headersParsed = false; // Reset flag when clearing
+        allData.reset();
+        consumedBytes = 0;
+        headersParsed = false;
         currentRequest = null;
     }
- 
+    public int getConsumedBytes() {
+    return consumedBytes;
+}
+    /**
+     * Get current size of accumulated data
+     */
     public int getAccumulationSize() {
-        return accumulationBuf.position();
+        return allData.size() - consumedBytes;
     }
     
+    /**
+     * Check if accumulation buffer has data
+     */
     public boolean hasAccumulatedData() {
-        return accumulationBuf.position() > 0;
+        return allData.size() > consumedBytes;
     }
     
+    /**
+     * Reset accumulation if it grew too large and is now empty
+     */
     public void resetAccumulationIfLarge() {
-        if (accumulationBuf.capacity() > 100 * 1024 && accumulationBuf.position() == 0) {
-            accumulationBuf = ByteBuffer.allocate(16 * 1024);
-            System.out.println("DEBUG: Reset accumulation buffer to initial size");
+        // If we accumulated a lot but now empty, reset to free memory
+        if (allData.size() > 100 * 1024 && !hasAccumulatedData()) {
+            allData = new ByteArrayOutputStream();
+            consumedBytes = 0;
+            System.out.println("DEBUG: Reset accumulation buffer to free memory");
         }
     }
     
-    // NEW: Getters and setters for headersParsed flag
+    // Getters and setters
+    
     public boolean areHeadersParsed() {
         return headersParsed;
     }
