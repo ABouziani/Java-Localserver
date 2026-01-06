@@ -15,7 +15,7 @@ public class ClientState {
     
     public ByteBuffer readBuf = ByteBuffer.allocateDirect(8 * 1024);
     public ByteArrayOutputStream allData = new ByteArrayOutputStream();
-    public ByteBuffer accumulationBuf =  ByteBuffer.allocateDirect(1024*1000);
+    public ByteBuffer accumulationBuf =  ByteBuffer.allocateDirect(1);
 
     public ByteBuffer writeBuf = null;
     

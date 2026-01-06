@@ -61,7 +61,7 @@
         },
         "/upload": {
           "methods": [
-            "POST"
+            "POST","GET","DELETE"
           ],
           "root": "upload",
           "index": "me.html",

@@ -89,9 +89,7 @@ public class Router {
                 System.out.println("req.bodyBytes");
                 System.out.println(req.bodyBytes);
                 MultipartForm mf = MultipartForm.parse(req);
-                //System.out.println( mf.files.size() );
                 for (var part : mf.files) {
-                        //System.out.println("5555555555555555555555");
                         Path out = Paths.get(matched.root, part.filename).normalize();
                         Path parent = out.getParent();
                         if (parent != null) {
