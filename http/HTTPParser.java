@@ -16,12 +16,7 @@ public class HTTPParser {
     private static final byte[] CRLF = "\r\n".getBytes(StandardCharsets.UTF_8);
     private static final byte[] DOUBLE_CRLF = "\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
-    /**
-     * Parses HTTP request from ByteBuffer.
-     * Returns HTTPRequest object or null if incomplete.
-     * Advances buffer position on successful parse.
-     */
-    public static HTTPRequest tryParse(ByteBuffer buffer) {
+    public static HTTPRequest parseHeaders(ByteBuffer buffer) {
         if (buffer == null || !buffer.hasRemaining()) {
             return null;
         }
@@ -42,7 +37,7 @@ public class HTTPParser {
                 return HTTPRequest.invalid(431, "Request header fields too large");
             }
             
-            // Extract headers as bytes then convert to string
+            // Extract headers as bytes
             byte[] headersBytes = new byte[headersLength];
             buffer.position(startPos);
             buffer.get(headersBytes);
@@ -90,9 +85,7 @@ public class HTTPParser {
                 return HTTPRequest.invalid(400, "Invalid method format");
             }
             
-            if (!method.equals("GET") && 
-                !method.equals("POST") && 
-                !method.equals("DELETE")) {
+            if (!method.equals("GET") && !method.equals("POST") && !method.equals("DELETE")) {
                 return HTTPRequest.invalid(501, "Method not implemented: " + method);
             }
 
@@ -168,11 +161,48 @@ public class HTTPParser {
                 }
             }
 
-            // Validate Host header for HTTP/1.1
+            // Validate Host header
             if (!headers.containsKey("host") || headers.get("host").trim().isEmpty()) {
                 return HTTPRequest.invalid(400, "Missing Host header (required for HTTP/1.1)");
             }
 
+            // Create request with headers only (no body yet)
+            HTTPRequest request = new HTTPRequest();
+            request.method = method;
+            
+            try {
+                request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                request.path = rawPath;
+            }
+            
+            request.version = version;
+            request.headers = headers;
+            request.bodyBytes = null; // Body not parsed yet
+            request.valid = true;
+            
+            return request;
+            
+        } catch (Exception e) {
+            buffer.reset();
+            return HTTPRequest.invalid(400, "Parse error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Parse body for a request that already has headers parsed (step 2).
+     * Updates the request object with body data.
+     * Returns true if body complete, false if incomplete, null if error.
+     */
+    public static Boolean parseBody(HTTPRequest request, ByteBuffer buffer) {
+        if (request == null || !request.valid) {
+            return null; // Error
+        }
+        
+        try {
+            Map<String, String> headers = request.headers;
+            String method = request.method;
+            
             // Parse Content-Length and Transfer-Encoding
             long contentLength = -1;
             boolean isChunked = false;
@@ -186,7 +216,10 @@ public class HTTPParser {
             
             if (headers.containsKey("content-length")) {
                 if (isChunked) {
-                    return HTTPRequest.invalid(400, "Both Content-Length and chunked Transfer-Encoding present");
+                    request.valid = false;
+                    request.errorCode = 400;
+                    request.errorMessage = "Both Content-Length and chunked Transfer-Encoding present";
+                    return null; // Error
                 }
                 
                 String clValue = headers.get("content-length");
@@ -197,7 +230,10 @@ public class HTTPParser {
                     
                     for (String v : values) {
                         if (!v.trim().equals(firstValue)) {
-                            return HTTPRequest.invalid(400, "Multiple different Content-Length values");
+                            request.valid = false;
+                            request.errorCode = 400;
+                            request.errorMessage = "Multiple different Content-Length values";
+                            return null; // Error
                         }
                     }
                     clValue = firstValue;
@@ -206,43 +242,55 @@ public class HTTPParser {
                 try {
                     contentLength = Long.parseLong(clValue.trim());
                     if (contentLength < 0) {
-                        return HTTPRequest.invalid(400, "Negative Content-Length");
+                        request.valid = false;
+                        request.errorCode = 400;
+                        request.errorMessage = "Negative Content-Length";
+                        return null; // Error
                     }
                 } catch (NumberFormatException e) {
-                    return HTTPRequest.invalid(400, "Invalid Content-Length value");
+                    request.valid = false;
+                    request.errorCode = 400;
+                    request.errorMessage = "Invalid Content-Length value";
+                    return null; // Error
                 }
             }
 
-            // Parse body (keep as bytes)
+            // Parse body based on method
             byte[] body = null;
-            int bodyStartPos = buffer.position();
             
-            if (method.equals("POST") || method.equals("PUT")) {
+            if (method.equals("POST")) {
                 if (!isChunked && contentLength == -1) {
-                    return HTTPRequest.invalid(411, "POST requires Content-Length or Transfer-Encoding: chunked");
+                    request.valid = false;
+                    request.errorCode = 411;
+                    request.errorMessage = "POST requires Content-Length or Transfer-Encoding: chunked";
+                    return null; // Error
                 }
                 
                 if (isChunked) {
                     ChunkResult result = parseChunkedBodyBytes(buffer);
                     if (result == null) {
-                        buffer.reset();
-                        return null; // Incomplete
+                        return false; // Incomplete
                     }
                     
                     body = result.body;
                     
                     if (body.length > CLIENT_MAX_BODY) {
-                        return HTTPRequest.invalid(413, "Request body too large");
+                        request.valid = false;
+                        request.errorCode = 413;
+                        request.errorMessage = "Request body too large";
+                        return null; // Error
                     }
                     
                 } else {
                     if (contentLength > CLIENT_MAX_BODY) {
-                        return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
+                        request.valid = false;
+                        request.errorCode = 413;
+                        request.errorMessage = "Content-Length exceeds maximum allowed size";
+                        return null; // Error
                     }
                     
                     if (buffer.remaining() < contentLength) {
-                        buffer.reset();
-                        return null; // Incomplete body
+                        return false; // Incomplete body
                     }
                     
                     body = new byte[(int) contentLength];
@@ -252,37 +300,59 @@ public class HTTPParser {
             } else {
                 // GET, DELETE - no body expected
                 if (isChunked || contentLength > 0) {
-                    return HTTPRequest.invalid(400, method + " request must not have a body");
+                    request.valid = false;
+                    request.errorCode = 400;
+                    request.errorMessage = method + " request must not have a body";
+                    return null; // Error
                 }
             }
 
-            // Create successful request
-            HTTPRequest request = new HTTPRequest();
-            request.method = method;
-            
-            try {
-                request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
-            } catch (Exception e) {
-                request.path = rawPath;
-            }
-            
-            request.version = version;
-            request.headers = headers;
+            // Body parsed successfully
             request.bodyBytes = body;
-            request.valid = true;
-            
-            return request;
+            return true; // Complete
             
         } catch (Exception e) {
-            buffer.reset();
-            return HTTPRequest.invalid(400, "Parse error: " + e.getMessage());
+            request.valid = false;
+            request.errorCode = 400;
+            request.errorMessage = "Body parse error: " + e.getMessage();
+            return null; // Error
         }
     }
 
     /**
+     * Legacy method: Parse complete request (headers + body) in one call.
+     * Kept for backward compatibility.
+     */
+    public static HTTPRequest tryParse(ByteBuffer buffer) {
+        buffer.mark();
+        
+        // Step 1: Parse headers
+        HTTPRequest request = parseHeaders(buffer);
+        if (request == null) {
+            buffer.reset();
+            return null; // Headers incomplete
+        }
+        
+        if (!request.valid) {
+            return request; // Header parsing error
+        }
+        
+        // Step 2: Parse body
+        Boolean bodyResult = parseBody(request, buffer);
+        if (bodyResult == null) {
+            return request; // Body parsing error (request.valid = false)
+        }
+        
+        if (!bodyResult) {
+            buffer.reset();
+            return null; // Body incomplete
+        }
+        
+        return request; // Complete
+    }
+
+    /**
      * Finds pattern in buffer starting from current position.
-     * Returns absolute position of pattern start, or -1 if not found.
-     * Does not modify buffer position.
      */
     private static int findPattern(ByteBuffer buffer, byte[] pattern) {
         int startPos = buffer.position();
@@ -301,8 +371,6 @@ public class HTTPParser {
 
     /**
      * Parses chunked body from ByteBuffer.
-     * Returns ChunkResult with body bytes, or null if incomplete.
-     * Advances buffer position on success.
      */
     private static ChunkResult parseChunkedBodyBytes(ByteBuffer buffer) {
         buffer.mark();
@@ -310,24 +378,20 @@ public class HTTPParser {
         
         try {
             while (buffer.hasRemaining()) {
-                // Find chunk size line (\r\n)
                 int lineStart = buffer.position();
                 int lineEnd = findPattern(buffer, CRLF);
                 
                 if (lineEnd == -1) {
                     buffer.reset();
-                    return null; // Incomplete
+                    return null;
                 }
                 
-                // Read chunk size line
                 byte[] sizeLineBytes = new byte[lineEnd - lineStart];
                 buffer.get(sizeLineBytes);
                 String chunkSizeLine = new String(sizeLineBytes, StandardCharsets.UTF_8).trim();
                 
-                // Skip \r\n
                 buffer.position(buffer.position() + 2);
                 
-                // Parse chunk size
                 int semicolonPos = chunkSizeLine.indexOf(';');
                 if (semicolonPos != -1) {
                     chunkSizeLine = chunkSizeLine.substring(0, semicolonPos).trim();
@@ -342,7 +406,7 @@ public class HTTPParser {
                     chunkSize = Integer.parseInt(chunkSizeLine, 16);
                 } catch (NumberFormatException e) {
                     buffer.reset();
-                    return null; // Invalid chunk size
+                    return null;
                 }
                 
                 if (chunkSize < 0) {
@@ -350,25 +414,20 @@ public class HTTPParser {
                     return null;
                 }
                 
-                // Last chunk
                 if (chunkSize == 0) {
-                    // Skip trailers if any (look for final \r\n\r\n)
                     int trailersEnd = findPattern(buffer, CRLF);
                     if (trailersEnd == -1) {
                         buffer.reset();
-                        return null; // Incomplete
+                        return null;
                     }
                     
-                    // Check if empty line (just \r\n) or trailers
                     if (trailersEnd == buffer.position()) {
-                        // Empty line, we're done
                         buffer.position(buffer.position() + 2);
                     } else {
-                        // Has trailers, find \r\n\r\n
                         int finalEnd = findPattern(buffer, DOUBLE_CRLF);
                         if (finalEnd == -1) {
                             buffer.reset();
-                            return null; // Incomplete
+                            return null;
                         }
                         buffer.position(finalEnd + 4);
                     }
@@ -380,26 +439,24 @@ public class HTTPParser {
                     return new ChunkResult(finalBody);
                 }
                 
-                // Read chunk data
                 if (buffer.remaining() < chunkSize + 2) {
                     buffer.reset();
-                    return null; // Incomplete chunk
+                    return null;
                 }
                 
                 byte[] chunkData = new byte[chunkSize];
                 buffer.get(chunkData);
                 bodyAccumulator.put(chunkData);
                 
-                // Skip trailing \r\n
                 buffer.position(buffer.position() + 2);
             }
             
             buffer.reset();
-            return null; // Incomplete (no final chunk)
+            return null;
             
         } catch (Exception e) {
             buffer.reset();
-            return null; // Parse error
+            return null;
         }
     }
 

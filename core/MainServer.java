@@ -70,7 +70,7 @@ public class MainServer {
             throw e;
         }
     }
-    private void handleRead(SelectionKey key) throws IOException {
+  private void handleRead(SelectionKey key) throws IOException {
     SocketChannel channel = (SocketChannel) key.channel();
     ClientState state = clients.get(channel);
 
@@ -87,7 +87,6 @@ public class MainServer {
         }
         
         state.lastActive = System.currentTimeMillis();
-        
         state.appendToAccumulation();
         
         ByteBuffer parseBuf = state.getAccumulationForParsing();
@@ -97,30 +96,49 @@ public class MainServer {
         
         while (continueProcessing && parseBuf.hasRemaining()) {
             
-            HTTPRequest req = HTTPParser.tryParse(parseBuf);
+            HTTPRequest req = state.getCurrentRequest();
             
-            if (req == null) {
-         
-                continueProcessing = false;
-                break;
+            // STEP 1: Parse headers (ila ma parsinhomch deja)
+            if (!state.areHeadersParsed()) {
+                req = HTTPParser.parseHeaders(parseBuf);
+                
+                if (req == null) {
+                    // Headers mazal incomplete
+                    continueProcessing = false;
+                    break;
+                }
+                
+                if (!req.valid) {
+                    // Error f headers
+                    sendErrorResponse(state, channel, req);
+                    return;
+                }
+                
+                // Headers parsed successfully!
+                state.setCurrentRequest(req);
+                state.setHeadersParsed(true);
+                System.out.println("DEBUG: Headers parsed, waiting for body...");
             }
             
-            if (!req.valid) {
-                HTTPResponse resp = new HTTPResponse();
-                resp.status = req.errorCode;
-                resp.keepAlive = false;
-                resp.body = req.getErrorResponse();
-                resp.headers.put("Content-Type", "text/html; charset=utf-8");
-                resp.headers.put("Content-Length", String.valueOf(resp.body.getBytes(StandardCharsets.UTF_8).length));
-                
-                state.pending.add(resp);
-                channel.register(selector, SelectionKey.OP_WRITE);
-                
-                state.clearAccumulation();
+            // STEP 2: Parse body (headers deja parsed)
+            Boolean bodyResult = HTTPParser.parseBody(req, parseBuf);
+            
+            if (bodyResult == null) {
+                // Error f body
+                sendErrorResponse(state, channel, req);
                 return;
             }
             
-              state.setCurrentRequest(req);
+            if (!bodyResult) {
+                // Body mazal incomplete, khassna ntsennaw
+                continueProcessing = false;
+                System.out.println("DEBUG: Body incomplete, waiting for more data...");
+                break;
+            }
+            
+            // Request kamel! (headers + body)
+            System.out.println("DEBUG: Request complete!");
+            state.setHeadersParsed(false); // Reset for next request
             
             if (server == null) {
                 String host = req.headers.get("host");
@@ -153,14 +171,7 @@ public class MainServer {
         }
         
         state.compactAccumulation();
-        
         state.resetAccumulationIfLarge();
-        
-        if (state.getAccumulationSize() > 1024 * 1024) {  // > 1MB
-            System.out.println("WARNING: Large accumulation buffer: " + 
-                             state.getAccumulationSize() + " bytes for " + 
-                             channel.getRemoteAddress());
-        }
         
     } catch (RuntimeException e) {
         System.err.println("ERROR: Failed to process request: " + e.getMessage());
@@ -168,10 +179,10 @@ public class MainServer {
         HTTPResponse resp = new HTTPResponse();        
         if (e.getMessage().contains("exceeds maximum")) {
             resp.status = 413;
-            resp.body = "<html><body><h1>413 Payload Too Large</h1><p>Request size exceeds the maximum allowed size.</p></body></html>";
+            resp.body = "<html><body><h1>413 Payload Too Large</h1></body></html>";
         } else {
             resp.status = 500;
-            resp.body = "<html><body><h1>500 Internal Server Error</h1><p>An error occurred while processing your request.</p></body></html>";
+            resp.body = "<html><body><h1>500 Internal Server Error</h1></body></html>";
         }
         resp.keepAlive = false;
         resp.headers.put("Content-Type", "text/html");
@@ -186,6 +197,19 @@ public class MainServer {
     }
 }
 
+// Helper method
+private void sendErrorResponse(ClientState state, SocketChannel channel, HTTPRequest req) throws IOException {
+    HTTPResponse resp = new HTTPResponse();
+    resp.status = req.errorCode;
+    resp.keepAlive = false;
+    resp.body = req.getErrorResponse();
+    resp.headers.put("Content-Type", "text/html; charset=utf-8");
+    resp.headers.put("Content-Length", String.valueOf(resp.body.getBytes(StandardCharsets.UTF_8).length));
+    
+    state.pending.add(resp);
+    channel.register(selector, SelectionKey.OP_WRITE);
+    state.clearAccumulation();
+}
     private void handleWrite(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
