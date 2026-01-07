@@ -2,6 +2,7 @@ package parsing;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -24,7 +25,17 @@ public class MultipartForm {
         if (i == -1)
             return mf;
         String b = "--" + ct.substring(i + 9);
-        byte[] body = req.bodyBytes != null ? req.bodyBytes : new byte[0];
+        
+        // Get body from bytes OR file
+        byte[] body;
+        if (req.bodyBytes != null) {
+            body = req.bodyBytes;
+        } else if (req.bodyFile != null) {
+            body = Files.readAllBytes(req.bodyFile.toPath());
+        } else {
+            body = new byte[0];
+        }
+        
         String all = new String(body, StandardCharsets.ISO_8859_1);
         String[] chunks = all.split(Pattern.quote(b));
         for (String ch : chunks) {
@@ -33,12 +44,12 @@ public class MultipartForm {
             int hEnd = ch.indexOf("\r\n\r\n");
             if (hEnd == -1)
                 continue;
-            String hdr = ch.substring(0, hEnd);
-            if (hEnd +4 > ch.length() -2) continue;
+            if (hEnd + 4 > ch.length() - 2) 
+                continue;
             String data = ch.substring(hEnd + 4, ch.length() - 2);
             String fn = null;
             String name = null;
-            for (String line : hdr.split("\r\n")) {
+            for (String line : ch.substring(0, hEnd).split("\r\n")) {
                 if (line.startsWith("Content-Disposition")) {
                     int fnIdx = line.indexOf("filename=\"");
                     if (fnIdx != -1) {

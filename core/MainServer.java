@@ -5,6 +5,8 @@ import configurations.Config;
 import http.HTTPParser;
 import http.HTTPRequest;
 import http.HTTPResponse;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -87,6 +89,52 @@ public class MainServer {
         }
         
         state.lastActive = System.currentTimeMillis();
+        
+        // Ila kaynin streaming body, nkatiwo directly f file
+        if (state.isStreamingBody()) {
+            state.readBuf.flip();
+            byte[] data = new byte[state.readBuf.remaining()];
+            state.readBuf.get(data);
+            state.readBuf.clear();
+            
+            state.writeToBodyFile(data, 0, data.length);
+            
+            // Check ila kamel body
+            if (state.isBodyStreamingComplete()) {
+                HTTPRequest req = state.getCurrentRequest();
+                File bodyFile = state.finishBodyStreaming();
+                
+                // Nzido file path l request
+                req.bodyFile = bodyFile;
+                req.bodyBytes = null; // Ma khassnahch f RAM
+                
+                System.out.println("DEBUG: Body streaming complete!");
+                state.setHeadersParsed(false);
+                
+                // Process request
+                String host = req.headers.get("host");
+                VirtualServer server = serverManager.getServer(host);
+                
+                if (server == null) {
+                    System.err.println("Warning: No server found for host: " + host);
+                    sendErrorResponse(state, channel, HTTPRequest.invalid(404, "Not Found"));
+                    return;
+                }
+                
+                state.setListenAddress(host);
+                server.read(req, state, channel);
+                
+                String connection = req.headers.getOrDefault("connection", "keep-alive").toLowerCase();
+                if (connection.equals("close")) {
+                    closeClient(channel);
+                    return;
+                }
+            }
+            
+            return;
+        }
+        
+        // Normal flow: append to accumulation (headers)
         state.appendToAccumulation();
         
         VirtualServer server = null;
@@ -100,12 +148,11 @@ public class MainServer {
             
             HTTPRequest req = state.getCurrentRequest();
             
-            // STEP 1: Parse headers (ila ma parsinhomch deja)
+            // STEP 1: Parse headers
             if (!state.areHeadersParsed()) {
                 HTTPParser.ParseResult headerResult = HTTPParser.parseHeaders(allBytes, offset, available);
                 
                 if (!headerResult.complete) {
-                    // Headers mazal incomplete
                     continueProcessing = false;
                     break;
                 }
@@ -113,20 +160,64 @@ public class MainServer {
                 req = headerResult.request;
                 
                 if (!req.valid) {
-                    // Error f headers
                     sendErrorResponse(state, channel, req);
                     return;
                 }
                 
-                // Headers parsed successfully!
                 state.setCurrentRequest(req);
                 state.setHeadersParsed(true);
                 state.markConsumed(headerResult.bytesConsumed);
                 
-                System.out.println("DEBUG: Headers parsed, consumed " + headerResult.bytesConsumed + " bytes");
+                System.out.println("DEBUG: Headers parsed");
+                
+                // Check ila khassna n-stream body
+                String method = req.method;
+                if (method.equals("POST")) {
+                    long contentLength = -1;
+                    boolean isChunked = false;
+                    
+                    if (req.headers.containsKey("transfer-encoding")) {
+                        String te = req.headers.get("transfer-encoding").toLowerCase();
+                        if (te.contains("chunked")) {
+                            isChunked = true;
+                        }
+                    }
+                    
+                    if (req.headers.containsKey("content-length")) {
+                        try {
+                            contentLength = Long.parseLong(req.headers.get("content-length").trim());
+                        } catch (NumberFormatException e) {
+                            sendErrorResponse(state, channel, HTTPRequest.invalid(400, "Invalid Content-Length"));
+                            return;
+                        }
+                    }
+                    
+                    // Ila body kbir (> 1MB), n-streamer f file
+                    if (contentLength > 1024 * 1024 && !isChunked) {
+                        state.startBodyStreaming(contentLength);
+                        
+                        // Nchofو ila kayna data deja f accumulation buffer
+                        allBytes = state.allData.toByteArray();
+                        offset = state.getConsumedBytes();
+                        available = allBytes.length - offset;
+                        
+                        if (available > 0) {
+                            // Nkatiwo data li kayna deja
+                            int toWrite = (int) Math.min(available, contentLength);
+                            state.writeToBodyFile(allBytes, offset, toWrite);
+                            state.markConsumed(toWrite);
+                        }
+                        
+                        // Nnaqsو accumulation buffer
+                        state.compactAccumulation();
+                        
+                        System.out.println("DEBUG: Started streaming body to file (size: " + contentLength + ")");
+                        return; // Nkamlo f next read
+                    }
+                }
             }
             
-            // STEP 2: Parse body (headers deja parsed)
+            // STEP 2: Parse body (small bodies only, < 1MB)
             allBytes = state.allData.toByteArray();
             offset = state.getConsumedBytes();
             available = allBytes.length - offset;
@@ -134,26 +225,22 @@ public class MainServer {
             HTTPParser.ParseResult bodyResult = HTTPParser.parseBody(req, allBytes, offset, available);
             
             if (!bodyResult.complete) {
-                // Body mazal incomplete
                 continueProcessing = false;
-                System.out.println("DEBUG: Body incomplete, waiting for more data...");
+                System.out.println("DEBUG: Body incomplete, waiting...");
                 break;
             }
             
             req = bodyResult.request;
             
             if (!req.valid) {
-                // Error f body
                 sendErrorResponse(state, channel, req);
                 return;
             }
             
-            // Mark consumed bytes (body)
             state.markConsumed(bodyResult.bytesConsumed);
             
-            // Request kamel! (headers + body)
-            System.out.println("DEBUG: Request complete! Consumed " + bodyResult.bytesConsumed + " bytes for body");
-            state.setHeadersParsed(false); // Reset for next request
+            System.out.println("DEBUG: Request complete!");
+            state.setHeadersParsed(false);
             
             if (server == null) {
                 String host = req.headers.get("host");
@@ -161,16 +248,7 @@ public class MainServer {
                 
                 if (server == null) {
                     System.err.println("Warning: No server found for host: " + host);
-                    
-                    HTTPResponse resp = new HTTPResponse();
-                    resp.status = 404;
-                    resp.keepAlive = false;
-                    resp.body = "<html><body><h1>404 Not Found</h1></body></html>";
-                    resp.headers.put("Content-Type", "text/html");
-                    resp.headers.put("Content-Length", String.valueOf(resp.body.length()));
-                    state.pending.add(resp);
-                    channel.register(selector, SelectionKey.OP_WRITE);
-                    state.clearAccumulation();
+                    sendErrorResponse(state, channel, HTTPRequest.invalid(404, "Not Found"));
                     return;
                 }
                 
@@ -185,38 +263,18 @@ public class MainServer {
             }
         }
         
-        // Compact: remove consumed data
         state.compactAccumulation();
         state.resetAccumulationIfLarge();
-        
-        if (state.getAccumulationSize() > 1024 * 1024) {
-            System.out.println("WARNING: Large accumulation buffer: " + 
-                             state.getAccumulationSize() + " bytes for " + 
-                             channel.getRemoteAddress());
-        }
         
     } catch (RuntimeException e) {
         System.err.println("ERROR: Failed to process request: " + e.getMessage());
         e.printStackTrace();
-        HTTPResponse resp = new HTTPResponse();        
-        if (e.getMessage().contains("exceeds maximum")) {
-            resp.status = 413;
-            resp.body = "<html><body><h1>413 Payload Too Large</h1><p>Request size exceeds the maximum allowed size.</p></body></html>";
-        } else {
-            resp.status = 500;
-            resp.body = "<html><body><h1>500 Internal Server Error</h1><p>An error occurred while processing your request.</p></body></html>";
-        }
-        resp.keepAlive = false;
-        resp.headers.put("Content-Type", "text/html");
-        resp.headers.put("Content-Length", String.valueOf(resp.body.length()));
-        
-        state.pending.add(resp);
-        channel.register(selector, SelectionKey.OP_WRITE);
-        state.clearAccumulation();
+        sendErrorResponse(state, channel, HTTPRequest.invalid(500, "Internal Server Error"));
     } catch (IOException e) {
         System.err.println("ERROR: IO exception during read: " + e.getMessage());
         closeClient(channel);
     }
+
 }
 // Helper method
 private void sendErrorResponse(ClientState state, SocketChannel channel, HTTPRequest req) throws IOException {

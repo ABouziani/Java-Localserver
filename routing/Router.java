@@ -2,6 +2,7 @@ package routing;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,7 +22,7 @@ public class Router {
     }
 
     public HTTPResponse route(HTTPRequest req, Session sess, CGIHandler cgi) throws IOException {
-        
+
         // basic validation
         if (!req.valid)
             return HTTPResponse.error(400, cfg);
@@ -82,24 +83,54 @@ public class Router {
                     return HTTPResponse.simple(200, "Deleted");
                 else
                     return HTTPResponse.error(500, cfg);
-            case "POST": // naive upload: if body present and content-type multipart/form-data
-            String ct = req.headers.getOrDefault("content-type", "");
-            
-            if (ct.startsWith("multipart/form-data")) {
-                System.out.println("req.bodyBytes");
-                System.out.println(req.bodyBytes);
-                MultipartForm mf = MultipartForm.parse(req);
-                for (var part : mf.files) {
-                        Path out = Paths.get(matched.root, part.filename).normalize();
-                        Path parent = out.getParent();
-                        if (parent != null) {
-                            Files.createDirectories(parent);
+            case "POST": // upload: multipart/form-data or regular body
+                String ct = req.headers.getOrDefault("content-type", "");
+
+                if (ct.startsWith("multipart/form-data")) {
+                    System.out.println("DEBUG: Processing multipart upload");
+
+                    try {
+                        MultipartForm mf = MultipartForm.parse(req);
+
+                        for (var part : mf.files) {
+                            Path out = Paths.get(matched.root, part.filename).normalize();
+
+                            // Security check: make sure normalized path is still under root
+                            if (!out.startsWith(Paths.get(matched.root).normalize())) {
+                                return HTTPResponse.error(403, cfg);
+                            }
+
+                            Path parent = out.getParent();
+                            if (parent != null) {
+                                Files.createDirectories(parent);
+                            }
+                            Files.write(out, part.data);
                         }
-                        Files.write(out, part.data);
+
+                        return HTTPResponse.simple(200, "Uploaded " + mf.files.size() + " file(s)");
+
+                    } catch (Exception e) {
+                        System.err.println("ERROR: Failed to process multipart: " + e.getMessage());
+                        e.printStackTrace();
+                        return HTTPResponse.error(500, cfg);
                     }
-                    return HTTPResponse.simple(200, "Uploaded");
                 }
-                return HTTPResponse.simple(200, req.body != null ? req.body : "");
+
+                // Non-multipart POST
+                String bodyContent = "";
+                try {
+                    if (req.bodyBytes != null) {
+                        bodyContent = new String(req.bodyBytes, StandardCharsets.UTF_8);
+                    } else if (req.bodyFile != null) {
+                        bodyContent = new String(Files.readAllBytes(req.bodyFile.toPath()), StandardCharsets.UTF_8);
+                    }
+                } catch (Exception e) {
+                    System.err.println("ERROR: Failed to read body: " + e.getMessage());
+                    return HTTPResponse.error(500, cfg);
+                }
+
+                return HTTPResponse.simple(200, bodyContent.isEmpty() ? "OK" : bodyContent);
+
             default:
                 return HTTPResponse.error(405, cfg);
         }
@@ -110,4 +141,3 @@ public class Router {
         return i == -1 ? "" : n.substring(i + 1);
     }
 }
-

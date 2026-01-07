@@ -52,19 +52,42 @@ public class VirtualServer {
         this.cgiHandler = new CGIHandler(config);
     }
 
-    public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
-        
-        if (req.body != null && req.body.length() > config.getClientMaxBody()) {
-            mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
-            return;
+   public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
+    
+    // Check body size (from bytes OR file)
+    long bodySize = 0;
+    if (req.bodyBytes != null) {
+        bodySize = req.bodyBytes.length;
+    } else if (req.bodyFile != null) {
+        bodySize = req.bodyFile.length();
+    }
+    
+    if (bodySize > config.getClientMaxBody()) {
+        // Cleanup file if exists
+        if (req.bodyFile != null && req.bodyFile.exists()) {
+            req.bodyFile.delete();
         }
-        try {
-            handleRequest(sc, req, state);
-        } catch (Throwable t) {
-            t.printStackTrace();
-            mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
+        mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
+        return;
+    }
+    
+    try {
+        handleRequest(sc, req, state);
+    } catch (Throwable t) {
+        t.printStackTrace();
+        mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
+    } finally {
+        // IMPORTANT: Cleanup body file after processing
+        if (req.bodyFile != null && req.bodyFile.exists()) {
+            try {
+                req.bodyFile.delete();
+                System.out.println("DEBUG: Cleaned up body file");
+            } catch (Exception e) {
+                System.err.println("WARNING: Failed to delete body file: " + e.getMessage());
+            }
         }
     }
+}
 
     public void write(SocketChannel sc, ClientState state) throws IOException {
 

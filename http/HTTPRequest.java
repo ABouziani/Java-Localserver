@@ -1,6 +1,9 @@
 package http;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,12 +13,8 @@ public class HTTPRequest {
     public String path;
     public String version;
     public Map<String, String> headers = new HashMap<>();
-    
-    public byte[] bodyBytes;
-    
-    // Legacy string body for backward compatibility (deprecated)
-    @Deprecated
-    public String body;
+    public byte[] bodyBytes; // For small bodies (< 1MB)
+    public File bodyFile; 
     
     public boolean valid = true;
     
@@ -29,14 +28,20 @@ public class HTTPRequest {
     static HTTPRequest invalid() {
         return invalid(400, "Bad Request");
     }
+      
+   
     
-    static HTTPRequest invalid(int statusCode, String message) {
+    /**
+     * Check if body is in file
+     */
+    public boolean isBodyInFile() {
+        return bodyFile != null;
+    }
+    public static HTTPRequest invalid(int statusCode, String message) {
         HTTPRequest r = new HTTPRequest();
         r.valid = false;
         r.errorCode = statusCode;
         r.errorMessage = message;
-        //System.out.println(r.errorCode);
-        //System.out.println(statusCode);
         return r;
     }
     

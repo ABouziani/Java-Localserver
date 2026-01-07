@@ -31,11 +31,11 @@ public class CGIHandler {
         env.put("PATH_INFO", file.getAbsolutePath());
         req.headers.forEach((k, v) -> env.put("HTTP_" + k.toUpperCase().replace('-', '_'), v));
         Process p = pb.start();
-        if (req.body != null) {
+     /*   if (req.body != null) {
             try (OutputStream os = p.getOutputStream()) {
                 os.write(req.body.getBytes(StandardCharsets.UTF_8));
             }
-        }
+        } */
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (InputStream is = p.getInputStream()) {
             is.transferTo(baos);
