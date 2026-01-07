@@ -9,7 +9,6 @@ import java.nio.file.Paths;
 import cgi.CGIHandler;
 import client.ClientState;
 import configurations.ServerConfig;
-import http.HTTPRequest;
 import http.HTTPResponse;
 import parsing.MultipartForm;
 import session.Session;;
@@ -83,30 +82,28 @@ public class Router {
                 else
                     return HTTPResponse.error(500, cfg);
             case "POST": // naive upload: if body present and content-type multipart/form-data
-                String ct = state.request.headers.getOrDefault("content-type", "");
-                // System.out.println(ct);
-                if (ct.startsWith("multipart/form-data")) {
-                    // MultipartForm mf = MultipartForm.parse(req);
-                    // // System.out.print(req.body);
+                // String ct = state.request.contendType;
+                // if (ct.startsWith("multipart/form-data")) {
+                    // MultipartForm mf = MultipartForm.parse(state.request);
+                    // System.out.print(req.body);
                     // for (var part : mf.files) {
-                    // System.out.println("5555555555555555555555");
-                    // Path out = Paths.get(matched.root, part.filename).normalize();
-                    // Path parent = out.getParent();
-                    // if (parent != null) {
-                    // Files.createDirectories(parent);
-                    // }
-                    // Files.write(out, part.data);
+                    //     Path out = Paths.get(matched.root, part.filename).normalize();
+                    //     Path parent = out.getParent();
+                    //     if (parent != null) {
+                    //         Files.createDirectories(parent);
+                    //     }
+                    //     Files.write(out, part.data);
                     // }
                     if (state.tempFile != null && Files.exists(state.tempFile)) {
                         // serve the uploaded file
-                        return HTTPResponse.serveFile(state.tempFile.toFile(), true);
+                        // return HTTPResponse.serveFile(state.tempFile.toFile(), true);
                     }
 
                     // fallback: no file uploaded
                     return HTTPResponse.simple(200, "No data uploaded");
                     // return HTTPResponse.simple(200, "Uploaded");
-                }
-                return HTTPResponse.simple(200, state.request.body != null ? state.request.body : "");
+                // }
+                // return HTTPResponse.simple(200, state.request.body != null ? state.request.body : "");
             default:
                 return HTTPResponse.error(405, cfg);
         }

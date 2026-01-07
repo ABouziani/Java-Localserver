@@ -12,6 +12,7 @@ public class HTTPRequest {
     public String body;
     public boolean valid = true;
     public String remain = "";
+    public String contendType = "";
     
     public int errorCode = 0;
     public String errorMessage = "";

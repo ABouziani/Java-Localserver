@@ -53,12 +53,13 @@ public class VirtualServer {
     }
 
     public void read(ClientState state, SocketChannel sc) throws IOException {
-        if (state.request.body != null && state.request.body.length() > config.getClientMaxBody()) {
-            mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
-            return;
-        }
+        // if (state.request.body != null && state.request.body.length() >
+        // config.getClientMaxBody()) {
+        // mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
+        // return;
+        // }
         try {
-            handleRequest(sc,state);
+            handleRequest(sc, state);
         } catch (Throwable t) {
             t.printStackTrace();
             mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
@@ -67,7 +68,8 @@ public class VirtualServer {
 
     public void write(SocketChannel sc, ClientState state) throws IOException {
 
-        if (state.pending.isEmpty()) return;
+        if (state.pending.isEmpty())
+            return;
         HTTPResponse resp = state.pending.peek();
         if (!resp.sentHeader) {
             byte[] h = resp.toHeaderBytes();
@@ -77,16 +79,21 @@ public class VirtualServer {
         if (state.writeBuf != null && state.writeBuf.hasRemaining()) {
             sc.write(state.writeBuf);
             if (state.writeBuf.hasRemaining())
-                return; // partial
+                return;
+            // if (state.writeBuf.hasRemaining())
             state.writeBuf = null;
+            mainServer.closeClient(sc);
         }
+
         if (!resp.streamed) {
             if (resp.body != null) {
+
                 state.writeBuf = ByteBuffer.wrap(resp.body.getBytes(StandardCharsets.UTF_8));
                 sc.write(state.writeBuf);
                 if (state.writeBuf.hasRemaining())
                     return; // partial
                 state.writeBuf = null;
+                mainServer.closeClient(sc);
             }
             state.pending.poll();
             if (!resp.keepAlive) {
@@ -102,6 +109,7 @@ public class VirtualServer {
             System.out.println(resp.file.toPath());
             long transferred = resp.fileChannel.transferTo(resp.filePos, 8192, sc);
             resp.filePos += transferred;
+
             if (resp.filePos >= resp.file.length()) {
                 resp.fileChannel.close();
                 state.pending.poll();

@@ -199,6 +199,7 @@ public class HTTPParser {
         }
 
         HTTPRequest request = new HTTPRequest();
+        request.contendType = headers.getOrDefault("content-type", "");
         request.headers = headers;
         request.version = version;
         request.method = method;
@@ -287,6 +288,9 @@ public class HTTPParser {
             
             if (isChunked) {
                 state.handleChunkedBody();
+                if (state.receivedLength > CLIENT_MAX_BODY) {
+                    return HTTPRequest.invalid(413, "Request body too large");
+                }
                 if (state.currentChunkSize == -1) {
                     return null; 
                 }
@@ -294,9 +298,6 @@ public class HTTPParser {
                 // body = result.body;
                 // remaining = result.remaining;
                 
-                // if (body.length() > CLIENT_MAX_BODY) {
-                //     return HTTPRequest.invalid(413, "Request body too large");
-                // }
                 
             } else {
                 if (contentLength > CLIENT_MAX_BODY) {

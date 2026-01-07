@@ -66,8 +66,8 @@ public class ServerManager {
         VirtualServer server = addressToServer.get(host);
 
         if (server == null) {
-            System.err.println("Warning: No server found for address " + host +
-                    ", using default");
+            // System.err.println("Warning: No server found for address " + host +
+            //         ", using default");
 
             return defaultServer;
         }

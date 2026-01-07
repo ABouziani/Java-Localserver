@@ -1,6 +1,5 @@
 package client;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -29,10 +28,11 @@ public class ClientState {
     public int indexOfHeadersEnd = -1;
     public boolean headersParsed = false;
     private String listenAddress;
+    
     // body handling
     public long expectedLength = -1;
     public long receivedLength = 0;
-
+    public Boolean isShouldUseFile = false;
     // streaming upload
     public FileChannel fileOut;
     public Path tempFile;
@@ -92,7 +92,6 @@ public class ClientState {
                 String hex = new String(this.in.toByteArray(), i, lineEnd - i, java.nio.charset.StandardCharsets.US_ASCII);
                 this.currentChunkSize = Integer.parseInt(hex.trim(), 16);
                 i = lineEnd + 2;
-
                 if (this.currentChunkSize == 0) {
                     this.fileOut.close();
                     System.out.println("Chunked upload saved to " + this.tempFile);
@@ -126,9 +125,8 @@ public class ClientState {
         int end = indexOfHeadersEnd();
         if (end == -1)
             return null;
-
         byte[] headers = new byte[end];
-        System.arraycopy(this.in, 0, headers, 0, end);
+        System.arraycopy(this.in.toByteArray(), 0, headers, 0, end);
         return new String(headers, StandardCharsets.ISO_8859_1);
     }
 

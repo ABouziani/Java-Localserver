@@ -15,6 +15,7 @@ public class Main {
           mainServer.start();
           
         } catch (Exception e) {
+          e.printStackTrace();
           System.out.println("exceeeeeeeept");
           System.out.println(e.getMessage());
         }

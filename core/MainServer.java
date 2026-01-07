@@ -10,7 +10,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -85,30 +84,36 @@ public class MainServer {
         }
         // Parse port from socketChannel to determine which VirtualServer to use
         int r = channel.read(state.readBuf);
-        System.out.println("----------------000000");
         if (r == -1) {
+            closeClient(channel);
+            return;
+        } else if (r == 0) {
             closeClient(channel);
             return;
         }
         state.lastActive = System.currentTimeMillis();
         state.readBuf.flip();
-        byte[] chunk = new byte[state.readBuf.remaining()];
-        state.readBuf.get(chunk);
-        
+        // byte[] chunk = new byte[state.readBuf.remaining()];
+        // state.readBuf.get(chunk);
+
         // state.in.append(new String(b, StandardCharsets.UTF_8));
         // byte[] newData = new byte[state.in.length + chunk.length];
         // System.arraycopy(state.in, 0, newData, 0, state.in.length);
-        // System.arraycopy(chunk, 0, newData, state.in.length, chunk.length);
-        
+        // System.arraycopy(chunk, 0, hunk = new byte[state.readBuf.remaining()]newData,
+        // state.in.length, chunk.length);
+        byte[] chunk = new byte[state.readBuf.remaining()];
+        state.readBuf.get(chunk);
+        state.in.write(chunk);
         state.readBuf.clear();
-        state.in.write(state.readBuf.array());
 
         if (!state.headersParsed) {
             String headrsString = state.getHeaderString();
             if (headrsString == null)
                 return;
+
             HTTPRequest req = HTTPParser.ParseHeaders(headrsString);
-            if (req == null)return;
+            if (req == null)
+                return;
             if (req.valid == false) {
                 HTTPResponse resp = new HTTPResponse();
                 resp.keepAlive = false;
@@ -126,12 +131,21 @@ public class MainServer {
             if (req.method.equals("POST")) {
                 String te = state.request.headers.get("transfer-encoding");
                 String cl = state.request.headers.get("content-length");
-    
+
                 if ("chunked".equalsIgnoreCase(te)) {
                     state.chunked = true;
-                    state.openTempFile();
+                    state.isShouldUseFile = true;
+                    // state.openTempFile();
+
                 } else if (cl != null) {
+                    if (state.request.contendType.startsWith("multipart/form-data")) {
+                        state.isShouldUseFile = true;
+                    }
                     state.expectedLength = Long.parseLong(cl);
+                    // state.openTempFile();
+
+                }
+                if (state.isShouldUseFile){
                     state.openTempFile();
                 }
             }
@@ -160,24 +174,25 @@ public class MainServer {
             String host = state.request.headers.get("host");
             server = serverManager.getServer(host);
             if (server == null) {
-                System.err.println("Warning: No server found for address " + host +
-                        "");
+                // System.err.println("Warning: No server found for address " + host +
+                //         "");
                 closeClient(channel);
                 return;
             }
             state.setListenAddress(host);
         }
         // if (state.chunked)
-        //     state.handleChunkedBody();
+        // state.handleChunkedBody();
         // else if (state.expectedLength >= 0)
-        //     state.handleContentLengthBody();
+        // state.handleContentLengthBody();
 
         // when finished
         // if (state.expectedLength == state.receivedLength && !state.chunked) {
-        //     System.out.println("Upload saved to " + state.tempFile);
+        // System.out.println("Upload saved to " + state.tempFile);
         // }
         HTTPRequest req = HTTPParser.complateRequest(state);
-        if (req == null) return;
+        if (req == null)
+            return;
         server.read(state, channel);
         // }
 
@@ -202,6 +217,11 @@ public class MainServer {
 
         String listenAddress = state.getListenAddress();
         VirtualServer server = serverManager.getServer(listenAddress);
+        // try {
+            
+        // } catch (Exception e) {
+        //     // TODO: handle exception
+        // }
         server.write(channel, state);
     }
 
