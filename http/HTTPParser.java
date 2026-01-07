@@ -1,8 +1,6 @@
 package http;
 
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -367,7 +365,7 @@ public class HTTPParser {
     }
 
     
-    private static ChunkResult parseChunkedBody(String data) {
+    private ChunkResult parseChunkedBody(String data) {
         StringBuilder fullBody = new StringBuilder();
         int position = 0;
         

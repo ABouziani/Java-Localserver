@@ -1,7 +1,5 @@
 package parsing;
 
-import java.io.ByteArrayOutputStream;
-
 public class MultipartParser {
 
     
@@ -48,9 +46,9 @@ private static int indexOf(byte[] data, byte[] pattern, int from) {
     return -1;
 }
 
-private static int indexOf(byte[] data, byte[] pattern) {
-    return indexOf(data, pattern, 0);
-}
+// private static int indexOf(byte[] data, byte[] pattern) {
+//     return indexOf(data, pattern, 0);
+// }
 
 
 }

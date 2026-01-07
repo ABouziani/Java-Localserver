@@ -14,7 +14,6 @@ import java.util.UUID;
 import cgi.CGIHandler;
 import client.ClientState;
 import configurations.ServerConfig;
-import http.HTTPRequest;
 import http.HTTPResponse;
 import routing.Route;
 import routing.Router;
