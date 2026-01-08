@@ -202,14 +202,14 @@ public class HTTPParser {
             }
 
             // Reject chunked encoding (defer to future work)
-            if (isChunked) {
-                return HTTPRequest.invalid(501, "Transfer-Encoding: chunked not supported");
-            }
+            // if (isChunked) {
+            //     return HTTPRequest.invalid(501, "Transfer-Encoding: chunked not supported");
+            // }
 
             // Decide streaming: POST + (large or multipart)
             boolean needsStreaming = false;
             if (method.equals("POST")) {
-                if (isMultipart || (contentLength > 1_048_576)) {
+                if (isMultipart || (contentLength > 1024 * 1024) || isChunked) {
                     needsStreaming = true;
                 }
             }

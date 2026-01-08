@@ -56,6 +56,8 @@ public class VirtualServer {
     public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
         System.out.println("➡️ Dispatching request: " + req.path);
         // No body length check — handled by parser (Content-Length validation)
+        
+
         try {
             handleRequest(sc, req, state);
         } catch (Throwable t) {
@@ -104,10 +106,10 @@ public class VirtualServer {
                 state.writeBuf = null;
             }
             state.pending.poll();
-            if (!resp.keepAlive) {
+            // if (!resp.keepAlive) {
                 mainServer.closeClient(sc);
-                return;
-            }
+                // return;
+            // }
         } else {
             // streamed body (file)
             if (resp.fileChannel == null) {

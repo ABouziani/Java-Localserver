@@ -4,6 +4,9 @@ import cgi.CGIHandler;
 import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
+import parsing.ChunkedDecoder;
+import parsing.MultipartForm;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -13,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import session.Session;
 
@@ -95,6 +99,10 @@ public class Router {
                     return HTTPResponse.error(500, cfg);
                 }
             case "POST":
+                // // if (req.isChunked) {
+                // // return ChunkedDecoder.saveChunked(req, cfg);
+                // // }
+                // MultipartForm.printTempFile(req.tempFilePath);
                 if (req.tempFilePath == null || !Files.exists(req.tempFilePath)) {
                     return HTTPResponse.error(500, cfg);
                 }
@@ -129,9 +137,11 @@ public class Router {
                         filename = headers.substring(start, end);
                     }
                 }
+                long bsize = headers.split("\r\n")[0].length() + 5;
 
                 // 3. ✅ CRITICAL: Use Content-Length for body size
-                long bodySize = req.expectedContentLength; // ← from HTTPParser
+                long bodySize = req.expectedContentLength - headerEnd - bsize; // ← from HTTPParser
+                // System.out.print(bodySize);
                 if (bodySize <= 0) {
                     return HTTPResponse.error(400, cfg);
                 }
@@ -141,7 +151,11 @@ public class Router {
                 Path out = Path.of("upload", safeName).toAbsolutePath();
                 Files.createDirectories(out.getParent());
 
-                try (var src = open(req.tempFilePath, StandardOpenOption.READ); FileChannel dest = FileChannel.open(out, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                try (var src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
+                        FileChannel dest = FileChannel.open(out,
+                                StandardOpenOption.CREATE, // create if not exists
+                                StandardOpenOption.WRITE, // open for writing
+                                StandardOpenOption.TRUNCATE_EXISTING)) {
                     src.position(headerEnd);
                     long transferred = 0;
                     if (bodySize <= 0) {
