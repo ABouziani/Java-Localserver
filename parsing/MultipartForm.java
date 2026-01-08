@@ -54,6 +54,7 @@ public class MultipartForm {
                 FilePart p = new FilePart();
                 p.name = name;
                 p.filename = fn;
+                p.contentType = "text";
                 state.files.add(p);
                 state.fileOut.write(ByteBuffer.wrap(data.getBytes(StandardCharsets.ISO_8859_1)));
                 writtenBytes+=ch.length();

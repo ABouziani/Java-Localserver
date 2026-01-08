@@ -5,11 +5,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
 import cgi.CGIHandler;
 import client.ClientState;
 import configurations.ServerConfig;
 import http.HTTPResponse;
+import parsing.FilePart;
 import session.Session;;
 
 public class Router {
@@ -33,6 +35,7 @@ public class Router {
                 matchedPath = p;
             }
         }
+
         if (matched == null) {
             ////////////////////////////////////////////////////////
             matched = new Route();
@@ -70,8 +73,7 @@ public class Router {
             // run cgi
             return cgi.execute(state.request, f);
         }
-        // methods: GET -> serve file, DELETE -> delete file, POST -> accept upload if
-        // multipart
+
         switch (state.request.method) {
             case "GET":
                 return HTTPResponse.serveFile(f, true);
@@ -80,29 +82,29 @@ public class Router {
                     return HTTPResponse.simple(200, "Deleted");
                 else
                     return HTTPResponse.error(500, cfg);
-            case "POST": // naive upload: if body present and content-type multipart/form-data
+            case "POST":
                 // String ct = state.request.contendType;
                 // if (ct.startsWith("multipart/form-data")) {
-                    // MultipartForm mf = MultipartForm.parse(state.request);
-                    // System.out.print(req.body);
-                    // for (var part : mf.files) {
-                    //     Path out = Paths.get(matched.root, part.filename).normalize();
-                    //     Path parent = out.getParent();
-                    //     if (parent != null) {
-                    //         Files.createDirectories(parent);
-                    //     }
-                    //     Files.write(out, part.data);
-                    // }
-                    if (state.tempFile != null && Files.exists(state.tempFile)) {
-                        // serve the uploaded file
-                        // return HTTPResponse.serveFile(state.tempFile.toFile(), true);
-                    }
+                // MultipartForm mf = MultipartForm.parse(state.request);
+                // System.out.print(req.body);
+                state.fileOut.close();
 
-                    // fallback: no file uploaded
-                    return HTTPResponse.simple(200, "No data uploaded");
-                    // return HTTPResponse.simple(200, "Uploaded");
-                // }
-                // return HTTPResponse.simple(200, state.request.body != null ? state.request.body : "");
+                FilePart part = FilePart.getIfAllSame(state.files);
+                if (part == null) {
+                    return HTTPResponse.error(400, cfg);
+                }
+                Path out = Paths.get(matched.root, part.filename).normalize();
+                Path parent = out.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                if (state.tempFile != null && Files.exists(state.tempFile)) {
+                    Files.move(state.tempFile, out, StandardCopyOption.REPLACE_EXISTING);
+                    return HTTPResponse.simple(200, "uploaded");
+                }
+
+                return HTTPResponse.simple(200, "No data uploaded");
+            
             default:
                 return HTTPResponse.error(405, cfg);
         }

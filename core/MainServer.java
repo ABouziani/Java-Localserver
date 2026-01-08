@@ -78,11 +78,9 @@ public class MainServer {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
         if (System.currentTimeMillis() - state.lastActive >= 20000) {
-            // handle on the write also
             closeClient(channel);
             return;
         }
-        // Parse port from socketChannel to determine which VirtualServer to use
         int r = channel.read(state.readBuf);
         if (r == -1) {
             closeClient(channel);
@@ -93,14 +91,6 @@ public class MainServer {
         }
         state.lastActive = System.currentTimeMillis();
         state.readBuf.flip();
-        // byte[] chunk = new byte[state.readBuf.remaining()];
-        // state.readBuf.get(chunk);
-
-        // state.in.append(new String(b, StandardCharsets.UTF_8));
-        // byte[] newData = new byte[state.in.length + chunk.length];
-        // System.arraycopy(state.in, 0, newData, 0, state.in.length);
-        // System.arraycopy(chunk, 0, hunk = new byte[state.readBuf.remaining()]newData,
-        // state.in.length, chunk.length);
         byte[] chunk = new byte[state.readBuf.remaining()];
         state.readBuf.get(chunk);
         state.in.write(chunk);
@@ -135,15 +125,12 @@ public class MainServer {
                 if ("chunked".equalsIgnoreCase(te)) {
                     state.chunked = true;
                     state.isShouldUseFile = true;
-                    // state.openTempFile();
 
                 } else if (cl != null) {
                     if (state.request.contendType.startsWith("multipart/form-data")) {
                         state.isShouldUseFile = true;
                     }
                     state.expectedLength = Long.parseLong(cl);
-                    // state.openTempFile();
-
                 }
                 if (state.isShouldUseFile){
                     state.removeRange(state.indexOfHeadersEnd);
@@ -153,11 +140,6 @@ public class MainServer {
         }
 
         VirtualServer server = null;
-        // while (true) {
-        // System.out.println("----------------111111111");
-        // if (req == null)
-        // break;
-        // System.out.println("----------------2222222222");
         if (state.request.valid == false) {
             HTTPResponse resp = new HTTPResponse();
             resp.keepAlive = false;
@@ -169,8 +151,6 @@ public class MainServer {
             channel.register(selector, SelectionKey.OP_WRITE);
             return;
         }
-        // state.setCurrentRequest(req);
-        // state.in = new StringBuilder(state.request.remain);
         if (server == null) {
             String host = state.request.headers.get("host");
             server = serverManager.getServer(host);
@@ -182,21 +162,10 @@ public class MainServer {
             }
             state.setListenAddress(host);
         }
-        // if (state.chunked)
-        // state.handleChunkedBody();
-        // else if (state.expectedLength >= 0)
-        // state.handleContentLengthBody();
-
-        // when finished
-        // if (state.expectedLength == state.receivedLength && !state.chunked) {
-        // System.out.println("Upload saved to " + state.tempFile);
-        // }
         HTTPRequest req = HTTPParser.complateRequest(state);
         if (req == null)
             return;
         server.read(state, channel);
-        // }
-
     }
 
     private void handleWrite(SelectionKey key) throws IOException {

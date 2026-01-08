@@ -204,75 +204,10 @@ public class HTTPParser {
         request.path = rawPath;
         request.valid = true;
         return request;
-        // String body = null;
-        // String remaining = "";
-        // int bodyStart = headersEnd + 4;
-        // String bodyData = raw.substring(bodyStart);
         
-        // if (method.equals("POST") || method.equals("PUT")) {
-            
-        //     if (!isChunked && contentLength == -1) {
-        //         return HTTPRequest.invalid(411, "POST requires Content-Length or Transfer-Encoding: chunked");
-        //     }
-            
-        //     if (isChunked) {
-        //         ChunkResult result = parseChunkedBody(bodyData);
-        //         if (result == null) {
-        //             return null; 
-        //         }
-                
-        //         body = result.body;
-        //         remaining = result.remaining;
-                
-        //         if (body.length() > CLIENT_MAX_BODY) {
-        //             return HTTPRequest.invalid(413, "Request body too large");
-        //         }
-                
-        //     } else {
-        //         if (contentLength > CLIENT_MAX_BODY) {
-        //             return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
-        //         }
-                
-        //         if (bodyData.length() < contentLength) {
-        //             return null; 
-        //         }
-                
-        //         body = bodyData.substring(0, (int) contentLength);
-        //         remaining = bodyData.substring((int) contentLength);
-        //     }
-            
-        // } else {
-        //     body = null;
-        //     remaining = bodyData;
-            
-        //     if (isChunked || contentLength > 0) {
-        //         return HTTPRequest.invalid(400, method + " request must not have a body");
-        //     }
-        // }
-
-        
-        
-        // request.method = method;
-        
-        // try {
-        //     request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
-        // } catch (Exception e) {
-        //     request.path = rawPath;
-        // }
-        
-        // // request.version = version;
-        // // request.headers = headers;
-        // request.body = body;
-        // request.valid = true;
-        // request.remain = remaining;
-        
-        // return request;
     }
 
     public static HTTPRequest complateRequest(ClientState state) throws IOException{
-        // String body = null;
-        // String remaining = "";
-        // int bodyStart = state.indexOfHeadersEnd;
         String method = state.request.method;
         Boolean isChunked = state.chunked;
         Long contentLength = state.expectedLength;
@@ -293,10 +228,6 @@ public class HTTPParser {
                     return null; 
                 }
                 
-                // body = result.body;
-                // remaining = result.remaining;
-                
-                
             } else {
                 if (contentLength > CLIENT_MAX_BODY) {
                     return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
@@ -306,14 +237,9 @@ public class HTTPParser {
                     return null; 
                 }
                 
-                // body = bodyData.substring(0, (int) contentLength);
-                // remaining = bodyData.substring((int) contentLength);
             }
             
         } else {
-            // body = null;
-            // remaining = bodyData;
-            
             if (isChunked || contentLength > 0) {
                 return HTTPRequest.invalid(400, method + " request must not have a body");
             }
@@ -321,7 +247,6 @@ public class HTTPParser {
 
         
         
-        // request.method = method;
         
         // try {
         //     state.request.path = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
@@ -329,12 +254,7 @@ public class HTTPParser {
         //     request.path = rawPath;
         // }
         
-        // request.version = version;
-        // request.headers = headers;
-        // request.body = body;
         state.request.valid = true;
-        // request.remain = remaining;
-        
         return state.request;
     }
     
@@ -365,82 +285,82 @@ public class HTTPParser {
     }
 
     
-    private ChunkResult parseChunkedBody(String data) {
-        StringBuilder fullBody = new StringBuilder();
-        int position = 0;
+    // private ChunkResult parseChunkedBody(String data) {
+    //     StringBuilder fullBody = new StringBuilder();
+    //     int position = 0;
         
-        try {
-            while (position < data.length()) {
+    //     try {
+    //         while (position < data.length()) {
                 
-                int lineEnd = data.indexOf("\r\n", position);
-                if (lineEnd == -1) {
-                    return null; 
-                }
+    //             int lineEnd = data.indexOf("\r\n", position);
+    //             if (lineEnd == -1) {
+    //                 return null; 
+    //             }
                 
-                String chunkSizeLine = data.substring(position, lineEnd).trim();
+    //             String chunkSizeLine = data.substring(position, lineEnd).trim();
                 
-                int semicolonPos = chunkSizeLine.indexOf(';');
-                if (semicolonPos != -1) {
-                    chunkSizeLine = chunkSizeLine.substring(0, semicolonPos).trim();
-                }
+    //             int semicolonPos = chunkSizeLine.indexOf(';');
+    //             if (semicolonPos != -1) {
+    //                 chunkSizeLine = chunkSizeLine.substring(0, semicolonPos).trim();
+    //             }
                 
-                if (chunkSizeLine.isEmpty()) {
-                    position = lineEnd + 2;
-                    continue;
-                }
+    //             if (chunkSizeLine.isEmpty()) {
+    //                 position = lineEnd + 2;
+    //                 continue;
+    //             }
                 
-                int chunkSize;
-                try {
-                    chunkSize = Integer.parseInt(chunkSizeLine, 16);
-                } catch (NumberFormatException e) {
-                    return null; 
-                }
+    //             int chunkSize;
+    //             try {
+    //                 chunkSize = Integer.parseInt(chunkSizeLine, 16);
+    //             } catch (NumberFormatException e) {
+    //                 return null; 
+    //             }
                 
-                if (chunkSize < 0) {
-                    return null;
-                }
+    //             if (chunkSize < 0) {
+    //                 return null;
+    //             }
                 
-                if (chunkSize == 0) {
-                    position = lineEnd + 2;
+    //             if (chunkSize == 0) {
+    //                 position = lineEnd + 2;
                     
-                    int nextCrlf = data.indexOf("\r\n", position);
-                    if (nextCrlf == -1) {
-                        return null;
-                    }
+    //                 int nextCrlf = data.indexOf("\r\n", position);
+    //                 if (nextCrlf == -1) {
+    //                     return null;
+    //                 }
                     
-                    String afterZero = data.substring(position, nextCrlf).trim();
+    //                 String afterZero = data.substring(position, nextCrlf).trim();
                     
-                    if (afterZero.isEmpty()) {
-                        String remaining = data.substring(nextCrlf + 2);
-                        return new ChunkResult(fullBody.toString(), remaining);
-                    } else {
-                        int trailersEnd = data.indexOf("\r\n\r\n", position);
-                        if (trailersEnd == -1) {
-                            return null; // Incomplete
-                        }
-                        String remaining = data.substring(trailersEnd + 4);
-                        return new ChunkResult(fullBody.toString(), remaining);
-                    }
-                }
+    //                 if (afterZero.isEmpty()) {
+    //                     String remaining = data.substring(nextCrlf + 2);
+    //                     return new ChunkResult(fullBody.toString(), remaining);
+    //                 } else {
+    //                     int trailersEnd = data.indexOf("\r\n\r\n", position);
+    //                     if (trailersEnd == -1) {
+    //                         return null; // Incomplete
+    //                     }
+    //                     String remaining = data.substring(trailersEnd + 4);
+    //                     return new ChunkResult(fullBody.toString(), remaining);
+    //                 }
+    //             }
                 
-                position = lineEnd + 2;
+    //             position = lineEnd + 2;
                 
-                if (position + chunkSize + 2 > data.length()) {
-                    return null; // Incomplete chunk
-                }
+    //             if (position + chunkSize + 2 > data.length()) {
+    //                 return null; // Incomplete chunk
+    //             }
                 
-                String chunkData = data.substring(position, position + chunkSize);
-                fullBody.append(chunkData);
+    //             String chunkData = data.substring(position, position + chunkSize);
+    //             fullBody.append(chunkData);
                 
-                position += chunkSize + 2;
-            }
+    //             position += chunkSize + 2;
+    //         }
             
-            return null; // Incomplete (no final chunk)
+    //         return null; // Incomplete (no final chunk)
             
-        } catch (Exception e) {
-            return null; // Parse error
-        }
-    }
+    //     } catch (Exception e) {
+    //         return null; // Parse error
+    //     }
+    // }
 
     static class ChunkResult {
         String body;

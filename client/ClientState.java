@@ -59,6 +59,7 @@ public class ClientState {
                     target[i + 2] == '\r' &&
                     target[i + 3] == '\n') {
                 this.indexOfHeadersEnd = i + 4;
+                this.receivedLength +=4;
                 return i + 4;
             }
         }
@@ -71,12 +72,15 @@ public class ClientState {
         Files.createDirectories(uploadDir); // ensure exists
 
         this.tempFile = Files.createTempFile(uploadDir, "upload_", ".bin");
-        this.fileOut = FileChannel.open(this.tempFile, StandardOpenOption.WRITE);
+        this.fileOut = FileChannel.open(
+                this.tempFile,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     public void handleContentLengthBody() throws IOException {
         int toWrite = MultipartForm.parse(this);
-        if (toWrite != -1){
+        if (toWrite != -1) {
             removeRange(toWrite);
             this.receivedLength += toWrite;
         }
@@ -129,11 +133,10 @@ public class ClientState {
     public void removeRange(int index) throws IOException {
         byte[] data = in.toByteArray();
         if (index < 0 || index > data.length) {
-            System.err.println("ffffffffffffff");
             return;
         }
-        in.reset();                 
-        in.write(data, index, data.length-index);
+        in.reset();
+        in.write(data, index, data.length - index);
     }
 
     public String getHeaderString() {
