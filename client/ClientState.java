@@ -1,5 +1,7 @@
 package client;
 
+import http.HTTPRequest;
+import http.HTTPResponse;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -8,14 +10,14 @@ import java.nio.file.*;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
-import http.HTTPRequest;
-import http.HTTPResponse;
-
 public class ClientState {
+
+    // Parsing control — NEW
+    public boolean streamingActive = false;  // true = skip pipelining until body complete
 
     public SocketChannel ch;
 
-    // Read buffer for socket reads (8KB)
+    // Read buffer for socket reads (80KB)
     public ByteBuffer readBuf = ByteBuffer.allocateDirect(80 * 1024);
 
     // Accumulation buffer for small requests (headers / JSON)
@@ -35,32 +37,43 @@ public class ClientState {
     private HTTPRequest currentRequest;
     private String listenAddress;
 
-    // File streaming for multipart
+    // File streaming for large/multipart bodies
     public Path tempFilePath;
     public FileChannel tempFileChannel;
     public boolean streamingToFile = false;
 
+    // Body reception tracking — NEW
+    public long expectedBodyLength = -1;   // -1 = unknown or no body
+    public long receivedBodyBytes = 0;
+    public boolean bodyComplete = false;
+
     // Max accumulation size for small requests
-    private static final int MAX_ACCUMULATION_SIZE = 10 * 1024 * 1024 * 10; // 10 MB
+    private static final int MAX_ACCUMULATION_SIZE = 100 * 1024 * 1024; // 100 MB (was 100 MB before, typo fix: 10*1024*1024*10 = 100 MB)
 
     public ClientState(SocketChannel ch) {
         this.ch = ch;
     }
 
     /**
-     * Append data from readBuf
-     * If streamingToFile is true, write directly to temp file
-     * Else, use accumulationBuf
+     * Append data from readBuf. If streamingToFile is true, write to temp file
+     * and track progress. Else, accumulate in memory.
      */
     public void appendToAccumulation() throws IOException {
         readBuf.flip();
 
         if (streamingToFile) {
-            // write all bytes to temp file
-            if (tempFileChannel != null && readBuf.hasRemaining()) {
+            int remainingBefore = readBuf.remaining();
+            if (tempFileChannel != null && remainingBefore > 0) {
                 tempFileChannel.write(readBuf);
             }
+            int written = remainingBefore - readBuf.remaining();
+            receivedBodyBytes += written;
             readBuf.clear();
+
+            // Check if body is now complete
+            if (expectedBodyLength > 0 && receivedBodyBytes >= expectedBodyLength) {
+                bodyComplete = true;
+            }
             return;
         }
 
@@ -86,7 +99,9 @@ public class ClientState {
         int neededCapacity = currentSize + additionalSpace;
 
         int newCapacity = Math.max(currentCapacity * 2, neededCapacity);
-        if (newCapacity > MAX_ACCUMULATION_SIZE) newCapacity = MAX_ACCUMULATION_SIZE;
+        if (newCapacity > MAX_ACCUMULATION_SIZE) {
+            newCapacity = MAX_ACCUMULATION_SIZE;
+        }
 
         ByteBuffer newBuf = ByteBuffer.allocate(newCapacity);
         accumulationBuf.flip();
@@ -126,7 +141,7 @@ public class ClientState {
     }
 
     /**
-     * Reset accumulation buffer if too large
+     * Reset accumulation buffer if idle and oversized
      */
     public void resetAccumulationIfLarge() {
         if (accumulationBuf.capacity() > 100 * 1024 && accumulationBuf.position() == 0) {
@@ -136,25 +151,39 @@ public class ClientState {
     }
 
     // Getters / Setters
-    public HTTPRequest getCurrentRequest() { return currentRequest; }
-    public void setCurrentRequest(HTTPRequest c) { currentRequest = c; }
-    public String getListenAddress() { return listenAddress; }
-    public void setListenAddress(String l) { listenAddress = l; }
+    public HTTPRequest getCurrentRequest() {
+        return currentRequest;
+    }
+
+    public void setCurrentRequest(HTTPRequest c) {
+        currentRequest = c;
+    }
+
+    public String getListenAddress() {
+        return listenAddress;
+    }
+
+    public void setListenAddress(String l) {
+        listenAddress = l;
+    }
 
     /**
-     * Start streaming a multipart body to a temp file
+     * Start streaming to temp file
      */
     public void startStreamingToFile() throws IOException {
         if (!streamingToFile) {
             tempFilePath = Files.createTempFile("upload-", ".tmp");
             tempFileChannel = FileChannel.open(tempFilePath, StandardOpenOption.WRITE);
             streamingToFile = true;
-            System.out.println("DEBUG: Streaming multipart upload to temp file: " + tempFilePath);
+            receivedBodyBytes = 0;
+            bodyComplete = false;
+            System.out.println("DEBUG: Streaming POST body to temp file: " + tempFilePath);
+            System.out.println("DEBUG: Created temp file: " + tempFilePath);
         }
     }
 
     /**
-     * Finish streaming and close temp file
+     * Finish streaming: close file, mark complete
      */
     public void finishStreaming() throws IOException {
         if (streamingToFile) {
@@ -162,16 +191,42 @@ public class ClientState {
                 tempFileChannel.close();
             }
             streamingToFile = false;
+            bodyComplete = true;
+            System.out.println("DEBUG: Finished streaming. Total bytes: " + receivedBodyBytes);
         }
     }
 
     /**
-     * Delete temp file if needed
+     * Delete temp file if it exists
      */
     public void deleteTempFile() throws IOException {
         if (tempFilePath != null && Files.exists(tempFilePath)) {
             Files.delete(tempFilePath);
             tempFilePath = null;
+            System.out.println("DEBUG: Deleted temp file");
         }
+    }
+
+    /**
+     * Check if request body is fully received
+     */
+    public boolean isBodyComplete() {
+        // No body expected (e.g., GET, or POST with no Content-Length — shouldn't happen due to validation)
+        if (expectedBodyLength == -1 || expectedBodyLength == 0) {
+            return true;
+        }
+        // Streaming or in-memory: complete when received >= expected
+        return bodyComplete || (receivedBodyBytes >= expectedBodyLength);
+    }
+
+    /**
+     * Reset body state (call before new request)
+     */
+    public void resetBodyState() {
+        expectedBodyLength = -1;
+        receivedBodyBytes = 0;
+        bodyComplete = false;
+        streamingToFile = false;
+        streamingActive = false;  // ← add this line
     }
 }

@@ -8,109 +8,66 @@ import java.util.Map;
 
 public class HTTPRequest {
 
-    // try {
-    //         tempFilePath = Files.createTempFile("upload-", ".tmp");
-    //         tempFileChannel = FileChannel.open(
-    //             tempFilePath,
-    //             StandardOpenOption.WRITE);
-    //             tempFileChannel.write(readBuf);
-    //         } catch (IOException e) {
-    //             // TODO Auto-generated catch block
-    //             e.printStackTrace();
-    //         }
-
+    // Temp file reference — assigned *after* streaming completes (e.g., in VirtualServer)
     public FileChannel tempFileChannel;
     public Path tempFilePath;
 
-
-    /////////////////////////////
+    // Parsed metadata (set during header parsing)
     public String method;
     public String path;
     public String version;
     public Map<String, String> headers = new HashMap<>();
-    
-    // public byte[] bodyBytes;
-    
-    // Legacy string body for backward compatibility (deprecated)
+
+    // Streaming decision flags — set by HTTPParser
+    public boolean needsStreaming = false;
+    public long expectedContentLength = -1;  // -1 means unknown or no body
+    public boolean isMultipart = false;
+    public boolean isChunked = false;
+
+    // Legacy (deprecated)
     @Deprecated
     public String body;
-    
-    public boolean valid = true;
-    
-    // Not used with ByteBuffer approach
     @Deprecated
     public String remain = "";
-    
+
+    // Validation
+    public boolean valid = true;
     public int errorCode = 0;
     public String errorMessage = "";
 
+    // Factory for invalid requests
     static HTTPRequest invalid() {
         return invalid(400, "Bad Request");
     }
-    
+
     static HTTPRequest invalid(int statusCode, String message) {
         HTTPRequest r = new HTTPRequest();
         r.valid = false;
         r.errorCode = statusCode;
         r.errorMessage = message;
-        //System.out.println(r.errorCode);
-        //System.out.println(statusCode);
         return r;
     }
-    
-    /**
-     * Get body as String (for text content like JSON, form data, etc.)
-     */
-    // public String getBodyAsString() {
-    //     if (bodyBytes == null) {
-    //         return null;
-    //     }
-    //     return new String(bodyBytes, StandardCharsets.UTF_8);
-    // }
-    
-    /**
-     * Get body as bytes (for binary content like images, files, etc.)
-     */
-    // public byte[] getBodyAsBytes() {
-    //     return bodyBytes;
-    // }
-    
-    /**
-     * Check if request has body
-     */
-    // public boolean hasBody() {
-    //     return bodyBytes != null && bodyBytes.length > 0;
-    // }
-    
-    // /**
-    //  * Get body length
-    //  */
-    // public int getBodyLength() {
-    //     return bodyBytes == null ? 0 : bodyBytes.length;
-    // }
-    
+
+    // Error response helper
     public String getErrorResponse() {
-        if (valid) {
-            return null;
-        }
+        if (valid) return null;
         String statusText = getStatusText(this.errorCode);
-        String body = "<html><body><h1>" + errorCode + " " + statusText + "</h1><p>" + errorMessage + "</p></body></html>";
-        
+        String bodyHtml = "<html><body><h1>" + errorCode + " " + statusText + "</h1><p>" + errorMessage + "</p></body></html>";
         StringBuilder response = new StringBuilder();
         response.append("HTTP/1.1 ").append(errorCode).append(" ").append(statusText).append("\r\n");
         response.append("Content-Type: text/html; charset=utf-8\r\n");
-        response.append("Content-Length: ").append(body.getBytes(StandardCharsets.UTF_8).length).append("\r\n");
+        response.append("Content-Length: ").append(bodyHtml.getBytes(StandardCharsets.UTF_8).length).append("\r\n");
         response.append("Connection: close\r\n");
         response.append("\r\n");
-        response.append(body);
+        response.append(bodyHtml);
         return response.toString();
     }
-    
+
     private static String getStatusText(int code) {
         switch (code) {
             case 400: return "Bad Request";
             case 411: return "Length Required";
-            case 413: return "Content Too Large";
+            case 413: return "Payload Too Large";
             case 414: return "URI Too Long";
             case 431: return "Request Header Fields Too Large";
             case 501: return "Not Implemented";

@@ -1,27 +1,28 @@
 package core;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import cgi.CGIHandler;
 import client.ClientState;
 import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import routing.Route;
 import routing.Router;
 import session.Cookie;
 import session.Session;
 
 public class VirtualServer {
+
     private final ServerConfig config;
     private final MainServer mainServer;
 
@@ -53,22 +54,31 @@ public class VirtualServer {
     }
 
     public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
-        
-        if (req.body != null && req.body.length() > config.getClientMaxBody()) {
-            mainServer.enqueueResponse(sc, HTTPResponse.error(413, config));
-            return;
-        }
+        System.out.println("➡️ Dispatching request: " + req.path);
+        // No body length check — handled by parser (Content-Length validation)
         try {
             handleRequest(sc, req, state);
         } catch (Throwable t) {
             t.printStackTrace();
             mainServer.enqueueResponse(sc, HTTPResponse.error(500, config));
+        } finally {
+            // Cleanup temp file if present (safe: MultipartForm only reads it)
+            if (req.tempFilePath != null && Files.exists(req.tempFilePath)) {
+                try {
+                    Files.delete(req.tempFilePath);
+                    System.out.println("DEBUG: Deleted temp file: " + req.tempFilePath);
+                } catch (IOException e) {
+                    System.err.println("WARN: Failed to delete temp file: " + req.tempFilePath);
+                }
+            }
         }
     }
 
     public void write(SocketChannel sc, ClientState state) throws IOException {
 
-        if (state.pending.isEmpty()) return;
+        if (state.pending.isEmpty()) {
+            return;
+        }
         HTTPResponse resp = state.pending.peek();
         if (!resp.sentHeader) {
             byte[] h = resp.toHeaderBytes();
@@ -77,16 +87,20 @@ public class VirtualServer {
         }
         if (state.writeBuf != null && state.writeBuf.hasRemaining()) {
             sc.write(state.writeBuf);
-            if (state.writeBuf.hasRemaining())
+            if (state.writeBuf.hasRemaining()) {
                 return; // partial
+
+            }
             state.writeBuf = null;
         }
         if (!resp.streamed) {
             if (resp.body != null) {
                 state.writeBuf = ByteBuffer.wrap(resp.body.getBytes(StandardCharsets.UTF_8));
                 sc.write(state.writeBuf);
-                if (state.writeBuf.hasRemaining())
+                if (state.writeBuf.hasRemaining()) {
                     return; // partial
+
+                }
                 state.writeBuf = null;
             }
             state.pending.poll();
@@ -116,12 +130,13 @@ public class VirtualServer {
     }
 
     private void handleRequest(SocketChannel sc, HTTPRequest req, ClientState state) throws IOException {
-        
+
         // sessions
         String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
         Session sess = null;
-        if (sid != null)
+        if (sid != null) {
             sess = sessions.get(sid);
+        }
         if (sess == null) {
             sid = UUID.randomUUID().toString();
             sess = new Session(sid);
