@@ -146,6 +146,7 @@ public class MainServer {
 
                 }
                 if (state.isShouldUseFile){
+                    state.removeRange(state.indexOfHeadersEnd);
                     state.openTempFile();
                 }
             }

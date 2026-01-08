@@ -1,39 +1,40 @@
 package parsing;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.regex.Pattern;
 
+import client.ClientState;
 import http.HTTPRequest;
 
 public class MultipartForm {
-    public static class FilePart {
-        String name;
-        public String filename;
-        public byte[] data;
-    }
+    
 
-    public List<FilePart> files = new ArrayList<>();
-
-    public static MultipartForm parse(HTTPRequest req) throws IOException {
-        MultipartForm mf = new MultipartForm();
+    public static int parse(ClientState state) throws IOException {
+        HTTPRequest req = state.request;
         String ct = req.headers.getOrDefault("content-type", "");
         int i = ct.indexOf("boundary=");
         if (i == -1)
-            return mf;
+            return -1;
         String b = "--" + ct.substring(i + 9);
-        byte[] body = req.body != null ? req.body.getBytes(StandardCharsets.ISO_8859_1) : new byte[0];
+        int bondaryLength = b.length();
+        byte[] body = state.in != null ? state.in.toByteArray() : new byte[0];
         String all = new String(body, StandardCharsets.ISO_8859_1);
         String[] chunks = all.split(Pattern.quote(b));
+        if (chunks.length < 3)return -1;
+        int writtenBytes = bondaryLength*(chunks.length-1);
+      
         for (String ch : chunks) {
+            
             if (ch.trim().isEmpty() || ch.equals("--"))
                 continue;
             int hEnd = ch.indexOf("\r\n\r\n");
             if (hEnd == -1)
                 continue;
             String hdr = ch.substring(0, hEnd);
+            
+            if (hEnd+4 > ch.length() -2) continue;
             String data = ch.substring(hEnd + 4, ch.length() - 2);
             String fn = null;
             String name = null;
@@ -53,10 +54,11 @@ public class MultipartForm {
                 FilePart p = new FilePart();
                 p.name = name;
                 p.filename = fn;
-                p.data = data.getBytes(StandardCharsets.ISO_8859_1);
-                mf.files.add(p);
+                state.files.add(p);
+                state.fileOut.write(ByteBuffer.wrap(data.getBytes(StandardCharsets.ISO_8859_1)));
+                writtenBytes+=ch.length();
             }
         }
-        return mf;
+        return writtenBytes;
     }
 }

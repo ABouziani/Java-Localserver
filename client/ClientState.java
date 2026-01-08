@@ -11,10 +11,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 
 import http.HTTPRequest;
 import http.HTTPResponse;
+import parsing.FilePart;
+import parsing.MultipartForm;
 
 public class ClientState {
     public SocketChannel ch;
@@ -28,11 +32,12 @@ public class ClientState {
     public int indexOfHeadersEnd = -1;
     public boolean headersParsed = false;
     private String listenAddress;
-    
+
     // body handling
     public long expectedLength = -1;
     public long receivedLength = 0;
     public Boolean isShouldUseFile = false;
+    public List<FilePart> files = new ArrayList<>();
     // streaming upload
     public FileChannel fileOut;
     public Path tempFile;
@@ -61,8 +66,7 @@ public class ClientState {
     }
 
     public void openTempFile() throws IOException {
-     
-     
+
         Path uploadDir = Paths.get("uploads");
         Files.createDirectories(uploadDir); // ensure exists
 
@@ -71,11 +75,11 @@ public class ClientState {
     }
 
     public void handleContentLengthBody() throws IOException {
-        int bodyBytes = this.in.size() - this.indexOfHeadersEnd;
-        int toWrite = (int) Math.min(this.expectedLength - this.receivedLength, bodyBytes);
-
-        this.fileOut.write(ByteBuffer.wrap(this.in.toByteArray(), this.indexOfHeadersEnd, toWrite));
-        this.receivedLength += toWrite;
+        int toWrite = MultipartForm.parse(this);
+        if (toWrite != -1){
+            removeRange(toWrite);
+            this.receivedLength += toWrite;
+        }
     }
 
     public void handleChunkedBody() throws IOException {
@@ -89,7 +93,8 @@ public class ClientState {
                 if (lineEnd == -1)
                     return;
 
-                String hex = new String(this.in.toByteArray(), i, lineEnd - i, java.nio.charset.StandardCharsets.US_ASCII);
+                String hex = new String(this.in.toByteArray(), i, lineEnd - i,
+                        java.nio.charset.StandardCharsets.US_ASCII);
                 this.currentChunkSize = Integer.parseInt(hex.trim(), 16);
                 i = lineEnd + 2;
                 if (this.currentChunkSize == 0) {
@@ -119,6 +124,16 @@ public class ClientState {
                 return i;
         }
         return -1;
+    }
+
+    public void removeRange(int index) throws IOException {
+        byte[] data = in.toByteArray();
+        if (index < 0 || index > data.length) {
+            System.err.println("ffffffffffffff");
+            return;
+        }
+        in.reset();                 
+        in.write(data, index, data.length-index);
     }
 
     public String getHeaderString() {
