@@ -21,6 +21,9 @@ public class MainServer {
     private final Selector selector;
     private final ServerManager serverManager;
     private final Map<SocketChannel, ClientState> clients = new HashMap<>();
+    private static final long SELECT_TIMEOUT_MS = 1000;
+    private static final long IDLE_TIMEOUT_MS = 10000;   // headers / keep-alive
+    private static final long BODY_TIMEOUT_MS = 30000;
 
     public MainServer(Config config) throws IOException {
         this.selector = Selector.open();
@@ -32,7 +35,10 @@ public class MainServer {
 
         // Main event loop
         while (true) {
-            selector.select();
+            selector.select(SELECT_TIMEOUT_MS);
+            long now = System.currentTimeMillis();
+            checkTimeouts(now);
+
             Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
 
             while (keys.hasNext()) {
@@ -64,6 +70,7 @@ public class MainServer {
         try {
             clientChannel.configureBlocking(false);
             ClientState state = new ClientState(clientChannel);
+            state.lastActive = System.currentTimeMillis();
             clients.put(clientChannel, state);
 
             SelectionKey clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
@@ -289,4 +296,37 @@ public class MainServer {
         clients.remove(sc);
         sc.close();
     }
+
+    private void checkTimeouts(long now) {
+        for (SelectionKey key : selector.keys()) {
+            if (!key.isValid()) {
+                continue;
+            }
+            if (!(key.channel() instanceof SocketChannel)) {
+                continue;
+            }
+
+            SocketChannel channel = (SocketChannel) key.channel();
+            ClientState state = clients.get(channel);
+            if (state == null) {
+                continue;
+            }
+
+            long idleTime = now - state.lastActive;
+
+            long timeout = state.streamingActive
+                    ? BODY_TIMEOUT_MS
+                    : IDLE_TIMEOUT_MS;
+
+            if (idleTime > timeout) {
+                System.out.println("Timing out -> Chanel closed");
+                try {
+                    key.cancel();
+                    closeClient(channel);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
 }
