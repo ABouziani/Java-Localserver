@@ -3,13 +3,11 @@ package parsing;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.regex.Pattern;
 
 import client.ClientState;
 import http.HTTPRequest;
 
 public class MultipartForm {
-    
 
     public static int parse(ClientState state) throws IOException {
         HTTPRequest req = state.request;
@@ -21,20 +19,32 @@ public class MultipartForm {
         int bondaryLength = b.length();
         byte[] body = state.in != null ? state.in.toByteArray() : new byte[0];
         String all = new String(body, StandardCharsets.ISO_8859_1);
-        String[] chunks = all.split(Pattern.quote(b));
-        if (chunks.length < 3)return -1;
-        int writtenBytes = bondaryLength*(chunks.length-1);
-      
+        String[] chunks = all.split(b);
+        if (chunks.length < 2) {
+            return state.fileOut.write(ByteBuffer.wrap(all.getBytes(StandardCharsets.ISO_8859_1)));
+            
+        }
+        // if (chunks.length < 2)return -1;
+        int writtenBytes = bondaryLength * (chunks.length - 1);
+
         for (String ch : chunks) {
             
-            if (ch.trim().isEmpty() || ch.equals("--"))
+            System.out.print(ch);
+            if (ch.isEmpty())
                 continue;
+            if (ch.equals("--")) {
+                continue;
+            }
             int hEnd = ch.indexOf("\r\n\r\n");
-            if (hEnd == -1)
+            if (hEnd == -1) {
+                writtenBytes += state.fileOut.write(ByteBuffer.wrap(ch.getBytes(StandardCharsets.ISO_8859_1)));
                 continue;
+            }
+
             String hdr = ch.substring(0, hEnd);
-            
-            if (hEnd+4 > ch.length() -2) continue;
+
+            if (hEnd + 4 > ch.length() - 2)
+                continue;
             String data = ch.substring(hEnd + 4, ch.length() - 2);
             String fn = null;
             String name = null;
@@ -57,7 +67,7 @@ public class MultipartForm {
                 p.contentType = "text";
                 state.files.add(p);
                 state.fileOut.write(ByteBuffer.wrap(data.getBytes(StandardCharsets.ISO_8859_1)));
-                writtenBytes+=ch.length();
+                writtenBytes += ch.length();
             }
         }
         return writtenBytes;
