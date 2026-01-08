@@ -89,6 +89,7 @@ public class MainServer {
             closeClient(channel);
             return;
         }
+        System.out.println("*************** "+r);
         state.lastActive = System.currentTimeMillis();
         state.readBuf.flip();
         byte[] chunk = new byte[state.readBuf.remaining()];
@@ -155,8 +156,8 @@ public class MainServer {
             String host = state.request.headers.get("host");
             server = serverManager.getServer(host);
             if (server == null) {
-                // System.err.println("Warning: No server found for address " + host +
-                //         "");
+                System.err.println("Warning: No server found for address " + host +
+                         "");
                 closeClient(channel);
                 return;
             }
@@ -187,11 +188,7 @@ public class MainServer {
 
         String listenAddress = state.getListenAddress();
         VirtualServer server = serverManager.getServer(listenAddress);
-        // try {
-            
-        // } catch (Exception e) {
-        //     // TODO: handle exception
-        // }
+        
         server.write(channel, state);
     }
 

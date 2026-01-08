@@ -59,7 +59,7 @@ public class ClientState {
                     target[i + 2] == '\r' &&
                     target[i + 3] == '\n') {
                 this.indexOfHeadersEnd = i + 4;
-                this.receivedLength +=4;
+                this.receivedLength += 4;
                 return i + 4;
             }
         }
@@ -87,8 +87,8 @@ public class ClientState {
     }
 
     public void handleChunkedBody() throws IOException {
-        // minimal chunk processor (no extensions)
-        int i = this.indexOfHeadersEnd;
+
+        int i = 0;
 
         while (i < this.in.size()) {
 
@@ -102,21 +102,20 @@ public class ClientState {
                 this.currentChunkSize = Integer.parseInt(hex.trim(), 16);
                 i = lineEnd + 2;
                 if (this.currentChunkSize == 0) {
-                    this.fileOut.close();
                     System.out.println("Chunked upload saved to " + this.tempFile);
                     return;
                 }
             }
-
             int remaining = this.in.size() - i;
             int toWrite = Math.min(this.currentChunkSize, remaining);
-
             this.fileOut.write(ByteBuffer.wrap(this.in.toByteArray(), i, toWrite));
             this.currentChunkSize -= toWrite;
             i += toWrite;
 
             if (this.currentChunkSize == 0 && remaining >= 2) {
                 i += 2;
+                removeRange(i);
+                i = 0;
                 this.currentChunkSize = -1;
             }
         }

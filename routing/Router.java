@@ -83,12 +83,10 @@ public class Router {
                 else
                     return HTTPResponse.error(500, cfg);
             case "POST":
-                // String ct = state.request.contendType;
-                // if (ct.startsWith("multipart/form-data")) {
-                // MultipartForm mf = MultipartForm.parse(state.request);
-                // System.out.print(req.body);
                 state.fileOut.close();
-
+                if (state.chunked){
+                    return HTTPResponse.simple(200, "uploaded chunked");
+                }
                 FilePart part = FilePart.getIfAllSame(state.files);
                 if (part == null) {
                     return HTTPResponse.error(400, cfg);
