@@ -17,13 +17,11 @@ public class ConfigLoader {
                 if (o instanceof List) {
                     List<?> rawList = (List<?>) o;
                     List<ServerConfig> cfgs = new ArrayList<ServerConfig>();
-                    for (Object item : rawList) {
-                        
+                    for (Object item : rawList) {  
                         if (item instanceof Map) {
                             Map<String,Object> map = (Map<String,Object>) item; 
                             cfgs.add(new ServerConfig().fromMap(map));
                         }
-                        System.out.println("----------------");
                     }
                     return cfgs;
                 }
