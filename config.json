@@ -18,7 +18,7 @@
           "methods": ["GET"],
           "root": "www",
           "index": "index.html",
-          "dirList": true,
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }
@@ -29,7 +29,7 @@
           ],
           "root": "www",
           "index": "err.html",
-          "dirList": true,
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }
@@ -50,11 +50,11 @@
       "routes": {
         "/": {
           "methods": [
-            "GET","POST"
+            "GET","POST","DELETE"
           ],
           "root": "www",
           "index": "index.html",
-          "dirList": true,
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }

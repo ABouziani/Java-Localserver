@@ -63,11 +63,11 @@ public class HTTPResponse {
         return r;
     }
 
-    public static HTTPResponse dirListing(File f) {
+    public static HTTPResponse dirListing(File f, String path) {
         StringBuilder b = new StringBuilder();
         b.append("<html><body><ul>");
         for (var x : f.listFiles()) {
-            b.append("<li><a href='" + x.getName() + "'>" + x.getName() + "</a></li>");
+            b.append("<li><a href='" + path+ "/"+ x.getName() + "'>" + x.getName() + "</a></li>");
         }
         b.append("</ul></body></html>");
         HTTPResponse r = new HTTPResponse();

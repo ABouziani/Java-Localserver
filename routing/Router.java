@@ -61,26 +61,15 @@ public class Router {
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
-        if (rel.equals("") || rel.equals("/")) {
-            rel = "/" + matched.index;
-        }
-        Path target = fsroot.resolve(rel.substring(1)).normalize();
+        // if (rel.equals("") || rel.equals("/")) {
+        // rel = "/" + matched.index;
+        // }
+        Path target = fsroot.resolve(rel).normalize();
         if (!target.startsWith(fsroot)) {
             return HTTPResponse.error(403, cfg);
         }
         File f = target.toFile();
-        if (f.isDirectory()) {
-            File idx = new File(f, matched.index);
-            if (idx.exists()) {
-                return HTTPResponse.serveFile(idx, true);
-            }
-            if (matched.dirList) {
-                return HTTPResponse.dirListing(f);
-            }
-            return HTTPResponse.error(403, cfg);
-        }
-        // if (!f.exists())
-        // return HTTPResponse.error(404, cfg);
+
         // CGI handling by extension
         String ext = getExt(f.getName());
         if (matched.cgi.containsKey(ext) || cfg.getRoutes().values().stream().anyMatch(r -> r.cgi.containsKey(ext))) {
@@ -91,17 +80,33 @@ public class Router {
         // multipart
         switch (req.method) {
             case "GET":
+                if (f.isDirectory()) {
+                    File idx = new File(f, matched.index);
+                    if (idx.exists()) {
+                        return HTTPResponse.serveFile(idx, true);
+                    }
+                    if (matched.dirList) {
+                        return HTTPResponse.dirListing(f, rel);
+                    }
+                    return HTTPResponse.error(403, cfg);
+                }
+                if (!f.exists())
+                    return HTTPResponse.error(404, cfg);
                 return HTTPResponse.serveFile(f, true);
             case "DELETE":
+                if (f.isDirectory()) {
+                    return HTTPResponse.error(403, cfg);
+                }
+                if (!f.exists())
+                    return HTTPResponse.error(404, cfg);
                 if (f.delete()) {
                     return HTTPResponse.simple(200, "Deleted");
-                } else {
-                    return HTTPResponse.error(500, cfg);
                 }
+                return HTTPResponse.error(500, cfg);
             case "POST":
-                // // if (req.isChunked) {
-                // // return ChunkedDecoder.saveChunked(req, cfg);
-                // // }
+                if (req.isChunked) {
+                    return ChunkedDecoder.saveChunked(req, cfg);
+                }
                 // MultipartForm.printTempFile(req.tempFilePath);
                 if (req.tempFilePath == null || !Files.exists(req.tempFilePath)) {
                     return HTTPResponse.error(500, cfg);
