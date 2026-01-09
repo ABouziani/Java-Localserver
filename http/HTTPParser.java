@@ -16,7 +16,8 @@ public class HTTPParser {
 
     /**
      * Parses HTTP request headers only.
-     * Returns HTTPRequest with metadata (may need streaming), or null if incomplete/invalid.
+     * Returns HTTPRequest with metadata (may need streaming), or null if
+     * incomplete/invalid.
      * Advances buffer position to start of body (or end of headers if no body).
      */
     public static HTTPRequest tryParse(ByteBuffer buffer) {
@@ -95,7 +96,7 @@ public class HTTPParser {
                 return HTTPRequest.invalid(414, "URI too long");
             }
             if (rawPath.contains(" ") || rawPath.contains("\t") ||
-                rawPath.contains("\r") || rawPath.contains("\n") || rawPath.contains("\0")) {
+                    rawPath.contains("\r") || rawPath.contains("\n") || rawPath.contains("\0")) {
                 return HTTPRequest.invalid(400, "Invalid characters in request target");
             }
 
@@ -111,7 +112,8 @@ public class HTTPParser {
             Map<String, String> headers = new HashMap<>();
             for (int i = 1; i < lines.length; i++) {
                 String line = lines[i].trim();
-                if (line.isEmpty()) continue;
+                if (line.isEmpty())
+                    continue;
 
                 if (line.length() > MAX_HEADER_LINE_LENGTH) {
                     return HTTPRequest.invalid(431, "Header line too long");
@@ -140,8 +142,8 @@ public class HTTPParser {
 
                 String normalizedName = name.toLowerCase();
                 headers.put(normalizedName, headers.containsKey(normalizedName)
-                    ? headers.get(normalizedName) + ", " + value
-                    : value);
+                        ? headers.get(normalizedName) + ", " + value
+                        : value);
             }
 
             // Validate Host header
@@ -159,6 +161,7 @@ public class HTTPParser {
                 String te = headers.get("transfer-encoding").toLowerCase();
                 if (te.contains("chunked")) {
                     isChunked = true;
+                    System.out.println("🔗 CHUNKED TRANSFER DETECTED");
                 }
             }
 
@@ -203,7 +206,7 @@ public class HTTPParser {
 
             // Reject chunked encoding (defer to future work)
             // if (isChunked) {
-            //     return HTTPRequest.invalid(501, "Transfer-Encoding: chunked not supported");
+            // return HTTPRequest.invalid(501, "Transfer-Encoding: chunked not supported");
             // }
 
             // Decide streaming: POST + (large or multipart)
@@ -265,7 +268,8 @@ public class HTTPParser {
 
     // Helper methods (unchanged)
     private static boolean isValidMethod(String method) {
-        if (method.isEmpty()) return false;
+        if (method.isEmpty())
+            return false;
         for (char c : method.toCharArray()) {
             if (!isTokenChar(c) || Character.isLowerCase(c)) {
                 return false;
@@ -275,18 +279,20 @@ public class HTTPParser {
     }
 
     private static boolean isValidHeaderName(String name) {
-        if (name.isEmpty()) return false;
+        if (name.isEmpty())
+            return false;
         for (char c : name.toCharArray()) {
-            if (!isTokenChar(c)) return false;
+            if (!isTokenChar(c))
+                return false;
         }
         return true;
     }
 
     private static boolean isTokenChar(char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-               (c >= '0' && c <= '9') ||
-               c == '!' || c == '#' || c == '$' || c == '%' || c == '&' ||
-               c == '\'' || c == '*' || c == '+' || c == '-' || c == '.' ||
-               c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
+                (c >= '0' && c <= '9') ||
+                c == '!' || c == '#' || c == '$' || c == '%' || c == '&' ||
+                c == '\'' || c == '*' || c == '+' || c == '-' || c == '.' ||
+                c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
     }
 }

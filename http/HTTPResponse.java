@@ -43,6 +43,17 @@ public class HTTPResponse {
         return r;
     }
 
+    public static HTTPResponse errorWithBody(int code, String customBody, ServerConfig cfg) {
+        HTTPResponse r = new HTTPResponse();
+        r.status = code;
+        r.headers.put("Connection", "close");
+        r.keepAlive = false;
+        r.body = customBody;
+        r.headers.put("Content-Length", String.valueOf(r.body.length()));
+        r.headers.put("Content-Type", "text/html; charset=utf-8");
+        return r;
+    }
+
     public static HTTPResponse redirect(String to) {
         HTTPResponse r = new HTTPResponse();
         r.status = 302;
@@ -67,7 +78,7 @@ public class HTTPResponse {
         StringBuilder b = new StringBuilder();
         b.append("<html><body><ul>");
         for (var x : f.listFiles()) {
-            b.append("<li><a href='" + path+ "/"+ x.getName() + "'>" + x.getName() + "</a></li>");
+            b.append("<li><a href='" + path + "/" + x.getName() + "'>" + x.getName() + "</a></li>");
         }
         b.append("</ul></body></html>");
         HTTPResponse r = new HTTPResponse();

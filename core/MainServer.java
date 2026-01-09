@@ -22,7 +22,7 @@ public class MainServer {
     private final ServerManager serverManager;
     private final Map<SocketChannel, ClientState> clients = new HashMap<>();
     private static final long SELECT_TIMEOUT_MS = 1000;
-    private static final long IDLE_TIMEOUT_MS = 10000;   // headers / keep-alive
+    private static final long IDLE_TIMEOUT_MS = 10000; // headers / keep-alive
     private static final long BODY_TIMEOUT_MS = 30000;
 
     public MainServer(Config config) throws IOException {
@@ -104,7 +104,7 @@ public class MainServer {
 
             // If we're actively streaming a body, wait for completion
             if (state.streamingActive) {
-                if (state.isBodyComplete()) {
+                  if (state.isBodyComplete()) {
                     // Body fully received — finalize and dispatch
                     try {
                         state.finishStreaming();
@@ -113,8 +113,6 @@ public class MainServer {
                         if (req != null) {
                             // Attach temp file to request for handler
                             req.tempFilePath = state.tempFilePath;
-                            //req.tempFileChannel = state.tempFileChannel; // or leave null if handler opens it
-
                             // Lookup server (we stored listenAddress earlier, or re-parse Host)
                             VirtualServer server = null;
                             String host = req.headers.get("host");
@@ -156,77 +154,87 @@ public class MainServer {
             VirtualServer server = null;
             boolean continueProcessing = true;
 
-            while (continueProcessing && parseBuf.hasRemaining()) {
-                HTTPRequest req = HTTPParser.tryParse(parseBuf);
+            HTTPRequest req = HTTPParser.tryParse(parseBuf);
 
-                if (req == null) {
-                    // Incomplete headers — wait for more data
-                    continueProcessing = false;
-                    break;
-                }
+            if (req == null) {
+                // Incomplete headers — wait for more data
+                return;
+            }
 
-                if (!req.valid) {
-                    sendErrorResponse(channel, state, req.errorCode, req.getErrorResponse());
-                    return;
-                }
+            if (!req.valid) {
+                sendErrorResponse(channel, state, req.errorCode, req.getErrorResponse());
+                return;
+            }
 
-                // Store request
-                state.setCurrentRequest(req);
+            // Store request
+            state.setCurrentRequest(req);
 
-                // Lookup server (first request in connection)
+            // Lookup server (first request in connection)
+            if (server == null) {
+                String host = req.headers.get("host");
+                server = serverManager.getServer(host);
                 if (server == null) {
-                    String host = req.headers.get("host");
-                    server = serverManager.getServer(host);
-                    if (server == null) {
-                        System.err.println("Warning: No server found for host: " + host);
-                        sendErrorResponse(channel, state, 404,
-                                "<html><body><h1>404 Not Found</h1></body></html>");
-                        return;
+                    System.err.println("Warning: No server found for host: " + host);
+                    sendErrorResponse(channel, state, 404,
+                            "<html><body><h1>404 Not Found</h1></body></html>");
+                    return;
+                }
+                state.setListenAddress(host);
+            }
+
+            // Check if streaming is needed
+            if (req.needsStreaming) {
+                // ✅ START streaming
+
+                state.resetBodyState();
+                state.expectedBodyLength = req.expectedContentLength;
+                state.isChunkedTransfer = req.isChunked; // ← Set flag for chunked detection
+                state.startStreamingToFile(); // ← CRITICAL: was missing!
+                state.streamingActive = true;
+
+                // Drain any remaining body bytes from parseBuf (headers already consumed)
+                if (parseBuf.hasRemaining()) {
+                    int remaining = parseBuf.remaining();
+
+                    // Capture the bytes before they're consumed
+                    byte[] drainedData = new byte[remaining];
+                    parseBuf.get(drainedData);
+
+                    if (state.tempFileChannel != null) {
+                        state.tempFileChannel.write(ByteBuffer.wrap(drainedData));
                     }
-                    state.setListenAddress(host);
+                    state.receivedBodyBytes += remaining;
+
+                    // IMPORTANT: For chunked transfers, check if terminating chunk is already in
+                    // this data
+                    if (req.isChunked) {
+                        state.detectChunkedEnd(drainedData); // ← Check if body is complete NOW
+                    }
                 }
 
-                // Check if streaming is needed
-                if (req.needsStreaming) {
-                    // ✅ START streaming
+                state.compactAccumulation();
+
+                // Check if we're already done (e.g., tiny multipart body)
+                if (state.isBodyComplete()) {
+                    state.streamingActive = false;
+                    state.finishStreaming();
+                    req.tempFilePath = state.tempFilePath; // now non-null
+                    server.read(req, state, channel);
                     state.resetBodyState();
-                    state.expectedBodyLength = req.expectedContentLength;
-                    state.startStreamingToFile();   // ← CRITICAL: was missing!
-                    state.streamingActive = true;
-
-                    // Drain any remaining body bytes from parseBuf (headers already consumed)
-                    if (parseBuf.hasRemaining()) {
-                        int remaining = parseBuf.remaining();
-                        if (state.tempFileChannel != null) {
-                            state.tempFileChannel.write(parseBuf);
-                        }
-                        state.receivedBodyBytes += remaining;
-                    }
-
-                    state.compactAccumulation();
-
-                    // Check if we're already done (e.g., tiny multipart body)
-                    if (state.isBodyComplete()) {
-                        state.streamingActive = false;
-                        state.finishStreaming();
-                        req.tempFilePath = state.tempFilePath;  // now non-null
-                        server.read(req, state, channel);
-                        state.resetBodyState();
-                        return;
-                    }
-
-                    // Suspend pipelining — wait for more body data
                     return;
                 }
 
-                // Small request — dispatch immediately
-                server.read(req, state, channel);
+                // Suspend pipelining — wait for more body data
+                return;
+            }
 
-                // Check Connection header for keep-alive
-                String connection = req.headers.getOrDefault("connection", "keep-alive").toLowerCase();
-                if (connection.equals("close")) {
-                    continueProcessing = false;
-                }
+            // Small request — dispatch immediately
+            server.read(req, state, channel);
+
+            // Check Connection header for keep-alive
+            String connection = req.headers.getOrDefault("connection", "keep-alive").toLowerCase();
+            if (connection.equals("close")) {
+                continueProcessing = false;
             }
 
             state.compactAccumulation();
@@ -245,8 +253,9 @@ public class MainServer {
         }
     }
 
-// Helper to avoid duplication
-    private void sendErrorResponse(SocketChannel channel, ClientState state, int status, String body) throws IOException {
+    // Helper to avoid duplication
+    private void sendErrorResponse(SocketChannel channel, ClientState state, int status, String body)
+            throws IOException {
         HTTPResponse resp = new HTTPResponse();
         resp.status = status;
         resp.keepAlive = false;

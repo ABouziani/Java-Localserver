@@ -13,12 +13,12 @@ import java.util.Queue;
 public class ClientState {
 
     // Parsing control — NEW
-    public boolean streamingActive = false;  // true = skip pipelining until body complete
+    public boolean streamingActive = false; // true = skip pipelining until body complete
 
     public SocketChannel ch;
 
     // Read buffer for socket reads (80KB)
-    public ByteBuffer readBuf = ByteBuffer.allocateDirect(80 * 1024);
+    public ByteBuffer readBuf = ByteBuffer.allocateDirect(8 * 1024);
 
     // Accumulation buffer for small requests (headers / JSON)
     public ByteBuffer accumulationBuf = ByteBuffer.allocate(16 * 1024); // 16KB
@@ -43,36 +43,46 @@ public class ClientState {
     public boolean streamingToFile = false;
 
     // Body reception tracking — NEW
-    public long expectedBodyLength = -1;   // -1 = unknown or no body
+    public long expectedBodyLength = -1; // -1 = unknown or no body
     public long receivedBodyBytes = 0;
     public boolean bodyComplete = false;
+    public boolean isChunkedTransfer = false; // ← Track if this is specifically a chunked transfer
 
     // Max accumulation size for small requests
-    private static final int MAX_ACCUMULATION_SIZE = 100 * 1024 * 1024; // 100 MB (was 100 MB before, typo fix: 10*1024*1024*10 = 100 MB)
+    private static final int MAX_ACCUMULATION_SIZE = 100 * 1024 * 1024; // 100 MB (was 100 MB before, typo fix:
+                                                                        // 10*1024*1024*10 = 100 MB)
+
+    // Chunked decoding state
+    private byte[] lastBytes = new byte[5]; // Track last 5 bytes to detect 0\r\n\r\n
+    private int lastBytesPos = 0;
+    private boolean atLineStart = true; // Track if we're at the start of a line
 
     public ClientState(SocketChannel ch) {
         this.ch = ch;
     }
 
-    /**
-     * Append data from readBuf. If streamingToFile is true, write to temp file
-     * and track progress. Else, accumulate in memory.
-     */
     public void appendToAccumulation() throws IOException {
         readBuf.flip();
-
+    
         if (streamingToFile) {
             int remainingBefore = readBuf.remaining();
-            if (tempFileChannel != null && remainingBefore > 0) {
-                tempFileChannel.write(readBuf);
+            byte[] data = new byte[remainingBefore];
+            readBuf.get(data);
+
+            if (tempFileChannel != null && data.length > 0) {
+                tempFileChannel.write(ByteBuffer.wrap(data));
             }
-            int written = remainingBefore - readBuf.remaining();
-            receivedBodyBytes += written;
+            receivedBodyBytes += data.length;
             readBuf.clear();
 
             // Check if body is now complete
             if (expectedBodyLength > 0 && receivedBodyBytes >= expectedBodyLength) {
                 bodyComplete = true;
+            }
+
+            // For chunked (expectedBodyLength == -1): detect terminating chunk (0\r\n\r\n)
+            if (isChunkedTransfer) {
+                detectChunkedEnd(data);
             }
             return;
         }
@@ -171,6 +181,7 @@ public class ClientState {
      * Start streaming to temp file
      */
     public void startStreamingToFile() throws IOException {
+
         if (!streamingToFile) {
             tempFilePath = Files.createTempFile("upload-", ".tmp");
             tempFileChannel = FileChannel.open(tempFilePath, StandardOpenOption.WRITE);
@@ -211,12 +222,67 @@ public class ClientState {
      * Check if request body is fully received
      */
     public boolean isBodyComplete() {
-        // No body expected (e.g., GET, or POST with no Content-Length — shouldn't happen due to validation)
-        if (expectedBodyLength == -1 || expectedBodyLength == 0) {
+        // No body expected (e.g., GET)
+        if (expectedBodyLength == 0) {
             return true;
         }
-        // Streaming or in-memory: complete when received >= expected
+        // For unknown length (chunked): wait for streaming to finish
+        if (expectedBodyLength == -1) {
+            return bodyComplete;
+        }
+        // For known length: complete when received >= expected
         return bodyComplete || (receivedBodyBytes >= expectedBodyLength);
+    }
+
+    /**
+     * Detect if chunked transfer has ended by looking for 0\r\n\r\n marker
+     * Only matches at line boundaries to avoid false positives in text data
+     */
+    public void detectChunkedEnd(byte[] data) {
+        // Look for pattern: 0\r\n\r\n (only at line start)
+        final byte[] CHUNKED_END = { '0', '\r', '\n', '\r', '\n' };
+
+        for (byte b : data) {
+            // Shift buffer
+            for (int i = 0; i < lastBytes.length - 1; i++) {
+                lastBytes[i] = lastBytes[i + 1];
+            }
+            lastBytes[lastBytes.length - 1] = b;
+            lastBytesPos = Math.min(lastBytesPos + 1, lastBytes.length);
+
+            // Track line boundaries: we're at line start after \r\n
+            if (lastBytesPos >= 2) {
+                if (lastBytes[lastBytes.length - 2] == '\r' && lastBytes[lastBytes.length - 1] == '\n') {
+                    atLineStart = true;
+                }
+            }
+
+            // Check if last 5 bytes match terminating chunk, but only if '0' is at line
+            // start
+            if (lastBytesPos >= 5 && atLineStart) {
+                boolean matches = true;
+                for (int i = 0; i < 5; i++) {
+                    if (lastBytes[i] != CHUNKED_END[i]) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    bodyComplete = true;
+                    System.out.println("✅ CHUNKED END DETECTED at byte " + receivedBodyBytes);
+                    return;
+                }
+            }
+
+            // If we read a non-whitespace byte and we're not building the pattern, we're
+            // not at line start
+            if (lastBytesPos >= 1 && b != '\r' && b != '\n' && atLineStart) {
+                // Check if this byte is NOT the start of '0\r\n\r\n'
+                if (b != '0') {
+                    atLineStart = false;
+                }
+            }
+        }
     }
 
     /**
@@ -227,6 +293,9 @@ public class ClientState {
         receivedBodyBytes = 0;
         bodyComplete = false;
         streamingToFile = false;
-        streamingActive = false;  // ← add this line
+        streamingActive = false;
+        isChunkedTransfer = false; // ← Reset chunked flag
+        lastBytesPos = 0; // Reset chunked detection
+        atLineStart = true; // Reset line boundary tracking
     }
 }
