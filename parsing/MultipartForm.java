@@ -32,7 +32,7 @@ public class MultipartForm {
             System.out.print(ch);
             if (ch.isEmpty())
                 continue;
-            if (ch.equals("--")) {
+            if (ch.equals("--\r\n")) {
                 continue;
             }
             int hEnd = ch.indexOf("\r\n\r\n");
