@@ -119,7 +119,6 @@ public class MainServer {
                             if (host != null) {
                                 server = serverManager.getServer(host);
                             }
-                           
 
                             if (server == null) {
                                 System.err.println("Warning: No server found for host: " + host);
@@ -177,7 +176,11 @@ public class MainServer {
                 }
                 state.setListenAddress(host);
             }
-
+            if (req.expectedContentLength > server.getClientMaxBody()) {
+                sendErrorResponse(channel, state, 413,
+                        "Content-Length exceeds maximum allowed size");
+                return;
+            }
             // Check if streaming is needed
             if (req.needsStreaming) {
                 // ✅ START streaming

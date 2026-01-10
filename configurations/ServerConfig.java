@@ -10,7 +10,7 @@ import routing.Route;
 public class ServerConfig {
     private String host = "";
     private List<Integer> ports = new ArrayList<>();
-    private int clientMaxBody = 10 * 1024 * 1024; // 10MB default
+    private int clientMaxBody = 10 * 1024 * 1024; 
     private String root = "";
     private Map<String, String> errorPages = new HashMap<>();
     private Map<String, Route> routes = new HashMap<>();
