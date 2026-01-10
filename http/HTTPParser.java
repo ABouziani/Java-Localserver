@@ -161,7 +161,6 @@ public class HTTPParser {
                 String te = headers.get("transfer-encoding").toLowerCase();
                 if (te.contains("chunked")) {
                     isChunked = true;
-                    System.out.println("🔗 CHUNKED TRANSFER DETECTED");
                 }
             }
 
@@ -255,7 +254,7 @@ public class HTTPParser {
         int startPos = buffer.position();
         int limit = buffer.limit();
 
-        outer: for (int i = startPos; i <= limit - pattern.length; i++) {
+       outer : for (int i = startPos; i <= limit - pattern.length; i++) {
             for (int j = 0; j < pattern.length; j++) {
                 if (buffer.get(i + j) != pattern[j]) {
                     continue outer;

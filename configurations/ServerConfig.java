@@ -8,7 +8,7 @@ import java.util.Map;
 import routing.Route;
 
 public class ServerConfig {
-    private String host = new String();
+    private String host = "";
     private List<Integer> ports = new ArrayList<>();
     private int clientMaxBody = 10 * 1024 * 1024; // 10MB default
     private String root = "";
@@ -33,26 +33,63 @@ public class ServerConfig {
                 this.ports = portsList;
             }
         }
+
         if (m.containsKey("host")) {
-            this.host = (String) m.get("host");
-        }
-        if (m.containsKey("root"))
-            this.root = (String) m.get("root");
-        if (m.containsKey("default"))
-            this.isdefault = (Boolean) m.get("default");
-        if (m.containsKey("clientMaxBody"))
-            this.clientMaxBody = ((Number) m.get("clientMaxBody")).intValue();
-        if (m.containsKey("errorPages")) {
-            Map<String, Object> ep = (Map<String, Object>) m.get("errorPages");
-            for (var e : ep.entrySet())
-                this.errorPages.put(e.getKey(), (String) e.getValue());
-        }
-        if (m.containsKey("routes")) {
-            Map<String, Object> rs = (Map<String, Object>) m.get("routes");
-            for (var en : rs.entrySet()) {
-                this.routes.put(en.getKey(), Route.fromMap((Map<String, Object>) en.getValue()));
+            Object hostObj = m.get("host");
+            if (hostObj instanceof String) {
+                this.host = (String) hostObj;
             }
         }
+
+        if (m.containsKey("root")) {
+            Object rootObj = m.get("root");
+            if (rootObj instanceof String) {
+                this.root = (String) rootObj;
+            }
+        }
+
+        if (m.containsKey("default")) {
+            Object defaultObj = m.get("default");
+            if (defaultObj instanceof Boolean) {
+                this.isdefault = (Boolean) defaultObj;
+            }
+        }
+
+        if (m.containsKey("clientMaxBody")) {
+            Object bodyObj = m.get("clientMaxBody");
+            if (bodyObj instanceof Number) {
+                this.clientMaxBody = ((Number) bodyObj).intValue();
+            }
+        }
+
+        if (m.containsKey("errorPages")) {
+            Object epObj = m.get("errorPages");
+            if (epObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> ep = (Map<String, Object>) epObj;
+                for (var e : ep.entrySet()) {
+                    if (e.getValue() instanceof String) {
+                        this.errorPages.put(e.getKey(), (String) e.getValue());
+                    }
+                }
+            }
+        }
+
+        if (m.containsKey("routes")) {
+            Object routesObj = m.get("routes");
+            if (routesObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> rs = (Map<String, Object>) routesObj;
+                for (var en : rs.entrySet()) {
+                    if (en.getValue() instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> routeMap = (Map<String, Object>) en.getValue();
+                        this.routes.put(en.getKey(), Route.fromMap(routeMap));
+                    }
+                }
+            }
+        }
+
         return this;
     }
 
@@ -108,7 +145,7 @@ public class ServerConfig {
         return isdefault;
     }
 
-    public void setIsDefaultt(Boolean defaultt) {
-        this.isdefault = defaultt;
+    public void setIsDefault(Boolean isdefault) {
+        this.isdefault = isdefault;
     }
 }

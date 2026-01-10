@@ -18,7 +18,7 @@ public class ClientState {
     public SocketChannel ch;
 
     // Read buffer for socket reads (80KB)
-    public ByteBuffer readBuf = ByteBuffer.allocateDirect(8 * 1024);
+    public ByteBuffer readBuf = ByteBuffer.allocateDirect(1024 * 8);
 
     // Accumulation buffer for small requests (headers / JSON)
     public ByteBuffer accumulationBuf = ByteBuffer.allocate(16 * 1024); // 16KB
@@ -63,7 +63,7 @@ public class ClientState {
 
     public void appendToAccumulation() throws IOException {
         readBuf.flip();
-    
+
         if (streamingToFile) {
             int remainingBefore = readBuf.remaining();
             byte[] data = new byte[remainingBefore];

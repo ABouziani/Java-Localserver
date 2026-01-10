@@ -104,7 +104,7 @@ public class MainServer {
 
             // If we're actively streaming a body, wait for completion
             if (state.streamingActive) {
-                  if (state.isBodyComplete()) {
+                if (state.isBodyComplete()) {
                     // Body fully received — finalize and dispatch
                     try {
                         state.finishStreaming();
@@ -119,10 +119,7 @@ public class MainServer {
                             if (host != null) {
                                 server = serverManager.getServer(host);
                             }
-                            if (server == null) {
-                                host = state.getListenAddress(); // fallback
-                                server = serverManager.getServer(host);
-                            }
+                           
 
                             if (server == null) {
                                 System.err.println("Warning: No server found for host: " + host);
@@ -152,7 +149,6 @@ public class MainServer {
             // Normal parsing (no active streaming)
             ByteBuffer parseBuf = state.getAccumulationForParsing();
             VirtualServer server = null;
-            boolean continueProcessing = true;
 
             HTTPRequest req = HTTPParser.tryParse(parseBuf);
 
@@ -230,12 +226,6 @@ public class MainServer {
 
             // Small request — dispatch immediately
             server.read(req, state, channel);
-
-            // Check Connection header for keep-alive
-            String connection = req.headers.getOrDefault("connection", "keep-alive").toLowerCase();
-            if (connection.equals("close")) {
-                continueProcessing = false;
-            }
 
             state.compactAccumulation();
             state.resetAccumulationIfLarge();
