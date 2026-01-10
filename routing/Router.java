@@ -103,19 +103,71 @@ public class Router {
                 }
                 return HTTPResponse.error(500, cfg);
             case "POST":
+                // Check if chunked transfer encoding first
                 if (req.isChunked) {
-                    return ChunkedDecoder.saveChunked(req, cfg);
-                }
-                // MultipartForm.printTempFile(req.tempFilePath);
-                if (req.tempFilePath == null || !Files.exists(req.tempFilePath)) {
-                    return HTTPResponse.error(500, cfg);
+                    String filename = req.headers.get("x-filename");
+
+                    if (filename == null || filename.isEmpty()) {
+                        if (req.tempFilePath != null && Files.exists(req.tempFilePath)) {
+                            try {
+                                byte[] fileBuf = new byte[8192];
+                                int readLen = (int) Math.min(8192, Files.size(req.tempFilePath));
+                                try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
+                                    fc.read(ByteBuffer.wrap(fileBuf), 0);
+                                }
+
+                                int firstCRLF = -1;
+                                for (int i = 0; i < readLen - 1; i++) {
+                                    if (fileBuf[i] == '\r' && fileBuf[i + 1] == '\n') {
+                                        firstCRLF = i;
+                                        break;
+                                    }
+                                }
+
+                                if (firstCRLF > 0) {
+                                    int dataStart = firstCRLF + 2;
+
+                                    // Search for Content-Disposition in the next chunk data
+                                    int searchLimit = Math.min(readLen, dataStart + 2048);
+                                    String searchData = new String(fileBuf, dataStart,
+                                            Math.min(2000, searchLimit - dataStart), StandardCharsets.ISO_8859_1);
+
+                                    int fnIdx = searchData.indexOf("filename=\"");
+                                    if (fnIdx != -1) {
+                                        int start = fnIdx + 10;
+                                        int end = searchData.indexOf('"', start);
+                                        if (end > start && end - start < 256) {
+                                            filename = searchData.substring(start, end);
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                // Continue to fallback
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+
+                    // If still no filename found, generate from Content-Type header
+                    if (filename == null || filename.isEmpty()) {
+                        String contentType = req.headers.getOrDefault("content-type", "application/octet-stream");
+                        filename = generateFilenameFromContentType(contentType);
+                    }
+
+                    String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
+                    Path out = Path.of("upload", safeName).toAbsolutePath();
+                    Files.createDirectories(out.getParent());
+                    return ChunkedDecoder.saveChunked(req, cfg, out);
                 }
 
-                // 1. Read first 4KB to find end of headers (\r\n\r\n)
+        
                 byte[] headerBuf = new byte[4096];
                 int headerLen = (int) Math.min(4096, Files.size(req.tempFilePath));
                 try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
                     fc.read(ByteBuffer.wrap(headerBuf), 0);
+                }
+                if (req.tempFilePath == null || !Files.exists(req.tempFilePath)) {
+                    return HTTPResponse.error(500, cfg);
                 }
 
                 int headerEnd = -1;
@@ -130,9 +182,9 @@ public class Router {
                     return HTTPResponse.error(400, cfg);
                 }
 
-                // 2. Extract filename
+                // 2. Extract filename from body, or generate from Content-Type
                 String headers = new String(headerBuf, 0, headerEnd, StandardCharsets.ISO_8859_1);
-                String filename = "upload.bin";
+                String filename = null;
                 int fnIdx = headers.indexOf("filename=\"");
                 if (fnIdx != -1) {
                     int start = fnIdx + 10;
@@ -141,6 +193,13 @@ public class Router {
                         filename = headers.substring(start, end);
                     }
                 }
+
+                // If no filename found, generate from Content-Type header
+                if (filename == null || filename.isEmpty()) {
+                    String contentType = req.headers.getOrDefault("content-type", "application/octet-stream");
+                    filename = generateFilenameFromContentType(contentType);
+                }
+
                 long bsize = headers.split("\r\n")[0].length() + 5;
 
                 // 3. ✅ CRITICAL: Use Content-Length for body size
@@ -154,7 +213,6 @@ public class Router {
                 String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
                 Path out = Path.of("upload", safeName).toAbsolutePath();
                 Files.createDirectories(out.getParent());
-
                 try (var src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
                         FileChannel dest = FileChannel.open(out,
                                 StandardOpenOption.CREATE, // create if not exists
@@ -197,5 +255,34 @@ public class Router {
     private String getExt(String n) {
         int i = n.lastIndexOf('.');
         return i == -1 ? "" : n.substring(i + 1);
+    }
+
+    private String generateFilenameFromContentType(String contentType) {
+        // Extract the base type (without parameters like charset)
+        String type = contentType.split(";")[0].trim();
+
+        // Map content types to file extensions
+        String extension = switch (type.toLowerCase()) {
+            case "image/png" -> ".png";
+            case "image/jpeg", "image/jpg" -> ".jpg";
+            case "image/gif" -> ".gif";
+            case "image/webp" -> ".webp";
+            case "application/pdf" -> ".pdf";
+            case "application/json" -> ".json";
+            case "application/xml", "text/xml" -> ".xml";
+            case "text/plain" -> ".txt";
+            case "text/html" -> ".html";
+            case "text/csv" -> ".csv";
+            case "application/zip" -> ".zip";
+            case "application/x-gzip", "application/gzip" -> ".gz";
+            case "video/mp4" -> ".mp4";
+            case "audio/mpeg" -> ".mp3";
+            case "audio/wav" -> ".wav";
+            default -> ".bin";
+        };
+
+        // Generate filename with timestamp
+        long timestamp = System.currentTimeMillis();
+        return "upload_" + timestamp + extension;
     }
 }

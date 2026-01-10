@@ -64,7 +64,6 @@
           "root": "upload",
           "index": "me.html",
           "dirList": true,
-          "redirect": "/",
           "cgi": {
             "py": "python3"
           }

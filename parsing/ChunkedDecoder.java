@@ -21,15 +21,14 @@ public class ChunkedDecoder {
         }
     }
 
-    public static HTTPResponse saveChunked(HTTPRequest req, ServerConfig cfg) {
+    public static HTTPResponse saveChunked(HTTPRequest req, ServerConfig cfg, Path out) {
+
         Path chunkedFile = null;
-        Path outputFile = Path.of("upload/chunked_upload.png");
+        Path outputFile = out;
 
         try {
 
             chunkedFile = Path.of(req.tempFilePath.toUri());
-            long size = Files.size(chunkedFile);
-            System.out.println("File size = " + size + " bytes");
             if (!Files.exists(chunkedFile)) {
                 throw new InvalidChunkException("Temporary chunked file not found");
             }
@@ -37,13 +36,16 @@ public class ChunkedDecoder {
             Files.createDirectories(outputFile.getParent());
 
             long maxSize = cfg.getClientMaxBody();
-            System.out.println("max size = " + maxSize + " bytes");
 
             long totalWritten = 0;
             boolean foundLastChunk = false;
+            boolean headersSkipped = false;
+            int headerEndPos = -1;
 
             try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(chunkedFile));
                     BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile))) {
+
+                ByteArrayOutputStream decodedChunks = new ByteArrayOutputStream();
 
                 while (true) {
 
@@ -113,7 +115,7 @@ public class ChunkedDecoder {
                                     "Unexpected EOF while reading chunk data (expected " + remaining + " more bytes)");
                         }
 
-                        bos.write(buffer, 0, read);
+                        decodedChunks.write(buffer, 0, read);
                         remaining -= read;
                         totalWritten += read;
                     }
@@ -138,8 +140,25 @@ public class ChunkedDecoder {
                     throw new InvalidChunkException("Missing terminating chunk (0\\r\\n\\r\\n)");
                 }
 
+                // Now we have all decoded chunks - skip multipart headers if present
+                byte[] decodedData = decodedChunks.toByteArray();
+                int dataStart = 0;
+
+                // Look for \r\n\r\n (end of headers) in the decoded data
+                for (int i = 0; i < decodedData.length - 3; i++) {
+                    if (decodedData[i] == '\r' && decodedData[i + 1] == '\n'
+                            && decodedData[i + 2] == '\r' && decodedData[i + 3] == '\n') {
+                        dataStart = i + 4;
+                        break;
+                    }
+                }
+
+                // Write only the actual file data (skip multipart headers)
+                bos.write(decodedData, dataStart, decodedData.length - dataStart);
                 bos.flush();
-                System.out.println("Body saved to: " + outputFile + " (" + totalWritten + " bytes)");
+
+                long actualBytes = decodedData.length - dataStart;
+                System.out.println("Body saved to: " + outputFile + " (" + actualBytes + " bytes)");
                 return HTTPResponse.simple(200, "OK");
 
             }
