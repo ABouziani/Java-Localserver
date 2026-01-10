@@ -20,6 +20,7 @@ import routing.Route;
 import routing.Router;
 import session.Cookie;
 import session.Session;
+import session.SessionManager;
 
 public class VirtualServer {
 
@@ -28,7 +29,7 @@ public class VirtualServer {
 
     private final Router router;
     private final CGIHandler cgiHandler;
-    private final Map<String, Session> sessions = new HashMap<>();
+    private final SessionManager sessionManager;
 
     private final List<Integer> ports;
     private final int clientMaxBody;
@@ -45,6 +46,7 @@ public class VirtualServer {
         this.ports = config.getPorts();
         this.clientMaxBody = config.getClientMaxBody();
         this.root = config.getRoot();
+        this.sessionManager = new SessionManager();
         this.errorPages = config.getErrorPages();
         this.routes = config.getRoutes();
         this.host = config.getHost();
@@ -136,14 +138,16 @@ public class VirtualServer {
         // sessions
         String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
         Session sess = null;
-        if (sid != null) {
-            sess = sessions.get(sid);
+        if ((req.method.equals("POST") || req.method.equals("DELETE")) && sid == null){
+            mainServer.enqueueResponse(sc,HTTPResponse.error(403, config));
+            return;
         }
+        if (sid != null)
+            sess = sessionManager.get(sid);
         if (sess == null) {
-            sid = UUID.randomUUID().toString();
-            sess = new Session(sid);
-            sessions.put(sid, sess);
+            sess = sessionManager.create();
         }
+
 
         HTTPResponse resp = router.route(req, sess, cgiHandler);
         // set session cookie
