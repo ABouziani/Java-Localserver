@@ -7,7 +7,6 @@ import java.util.Map;
 
 public class HTTPParser {
 
-    public static final long CLIENT_MAX_BODY = 104857600; // 100 MB hard cap
     private static final int MAX_REQUEST_LINE_LENGTH = 8192;
     private static final int MAX_HEADER_LINE_LENGTH = 8192;
     private static final int MAX_HEADERS_SIZE = 16384;
@@ -187,9 +186,7 @@ public class HTTPParser {
                     if (contentLength < 0) {
                         return HTTPRequest.invalid(400, "Negative Content-Length");
                     }
-                    if (contentLength > CLIENT_MAX_BODY) {
-                        return HTTPRequest.invalid(413, "Content-Length exceeds maximum allowed size");
-                    }
+                  
                 } catch (NumberFormatException e) {
                     return HTTPRequest.invalid(400, "Invalid Content-Length value");
                 }
