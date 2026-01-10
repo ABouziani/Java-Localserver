@@ -17,7 +17,16 @@ public class ServerConfig {
     private Boolean isdefault = false;
 
     public ServerConfig fromMap(Map<?, ?> m) {
-        if (m.containsKey("ports")) {
+        if (m.containsKey("default")) {
+            Object defaultObj = m.get("default");
+            if (defaultObj instanceof Boolean) {
+                this.isdefault = (Boolean) defaultObj;
+            }
+        }
+        if (this.isdefault && m.containsKey("ports")) {
+            System.out.println("Warning :in the default server not need a Port");
+        } else if (m.containsKey("ports")) {
+
             Object o = m.get("ports");
             if (o instanceof List) {
                 List<?> rawList = (List<?>) o;
@@ -32,26 +41,27 @@ public class ServerConfig {
 
                 this.ports = portsList;
             }
+        } else if (!this.isdefault) {
+            System.err.println("One of the servers has no port!");
+            System.exit(1);
         }
+        if (this.isdefault && m.containsKey("host")) {
+            System.out.println("Warning :in the default server not need a Host");
+        } else if (m.containsKey("host")) {
 
-        if (m.containsKey("host")) {
             Object hostObj = m.get("host");
             if (hostObj instanceof String) {
                 this.host = (String) hostObj;
             }
+        } else if (!this.isdefault) {
+            System.err.println("One of the servers has no host!");
+            System.exit(1);
         }
 
         if (m.containsKey("root")) {
             Object rootObj = m.get("root");
             if (rootObj instanceof String) {
                 this.root = (String) rootObj;
-            }
-        }
-
-        if (m.containsKey("default")) {
-            Object defaultObj = m.get("default");
-            if (defaultObj instanceof Boolean) {
-                this.isdefault = (Boolean) defaultObj;
             }
         }
 

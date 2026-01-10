@@ -58,8 +58,8 @@ public class HTTPResponse {
         HTTPResponse r = new HTTPResponse();
         r.status = 302;
         r.headers.put("Location", to);
-        r.body = "";
         r.headers.put("Content-Length", "0");
+        r.keepAlive = false;
         return r;
     }
 

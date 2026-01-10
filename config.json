@@ -37,8 +37,6 @@
       }
     },
      {
-      "host": "www.example.com",
-      "ports": [8080,8985],
       "root": "www",
       "clientMaxBody": 1048576000,
       "errorPages": {
@@ -61,7 +59,7 @@
         },
         "/upload": {
           "methods": [
-            "POST"
+            "POST","GET"
           ],
           "root": "upload",
           "index": "me.html",

@@ -47,9 +47,7 @@ public class Router {
             return HTTPResponse.errorWithBody(404, "Path not found", cfg);
         }
         // redirect
-        if (matched.redirect != null) {
-            return HTTPResponse.redirect(matched.redirect);
-        }
+
         if (!matched.methods.isEmpty() && !matched.methods.contains(req.method)) {
             return HTTPResponse.error(405, cfg);
         }
@@ -83,6 +81,9 @@ public class Router {
                     if (matched.dirList) {
                         return HTTPResponse.dirListing(f, rel);
                     }
+                    if (matched.redirect != null) {
+                        return HTTPResponse.redirect(matched.redirect);
+                    }
                     return HTTPResponse.error(403, cfg);
                 }
                 if (!f.exists())
@@ -96,6 +97,9 @@ public class Router {
                     return HTTPResponse.error(404, cfg);
                 if (f.delete()) {
                     return HTTPResponse.simple(200, "Deleted");
+                }
+                if (matched.redirect != null) {
+                    return HTTPResponse.redirect(matched.redirect);
                 }
                 return HTTPResponse.error(500, cfg);
             case "POST":
@@ -181,6 +185,9 @@ public class Router {
                 }
 
                 System.out.println("✅ Saved " + safeName + " (" + bodySize + " bytes)");
+                if (matched.redirect != null) {
+                    return HTTPResponse.redirect(matched.redirect);
+                }
                 return HTTPResponse.simple(200, "OK");
             default:
                 return HTTPResponse.error(405, cfg);
