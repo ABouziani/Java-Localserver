@@ -11,43 +11,30 @@ public class HTTPParser {
     private static final int MAX_HEADER_LINE_LENGTH = 8192;
     private static final int MAX_HEADERS_SIZE = 16384;
     private static final int MAX_URI_LENGTH = 8192;
-    private static final byte[] DOUBLE_CRLF = "\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
-    /**
-     * Parses HTTP request headers only.
-     * Returns HTTPRequest with metadata (may need streaming), or null if
-     * incomplete/invalid.
-     * Advances buffer position to start of body (or end of headers if no body).
-     */
+
     public static HTTPRequest tryParse(ByteBuffer buffer) {
         if (buffer == null || !buffer.hasRemaining()) {
             return null;
         }
 
-        buffer.mark();
-        int startPos = buffer.position();
-
         try {
+            // Convert buffer to string
+            byte[] data = new byte[buffer.remaining()];
+            buffer.get(data);
+            String rawData = new String(data, StandardCharsets.UTF_8);
+
             // Find end of headers (\r\n\r\n)
-            int headersEnd = findPattern(buffer, DOUBLE_CRLF);
+            int headersEnd = rawData.indexOf("\r\n\r\n");
             if (headersEnd == -1) {
-                buffer.reset();
+                buffer.position(buffer.position() - data.length); // Restore position
                 return null; // Incomplete headers
             }
 
-            int headersLength = headersEnd - startPos;
-            if (headersLength > MAX_HEADERS_SIZE) {
+            String headersSection = rawData.substring(0, headersEnd);
+            if (headersSection.length() > MAX_HEADERS_SIZE) {
                 return HTTPRequest.invalid(431, "Request header fields too large");
             }
-
-            // Extract headers section
-            byte[] headersBytes = new byte[headersLength];
-            buffer.position(startPos);
-            buffer.get(headersBytes);
-            String headersSection = new String(headersBytes, StandardCharsets.UTF_8);
-
-            // Skip \r\n\r\n — position now at start of body
-            buffer.position(headersEnd + 4);
 
             // Split into lines
             String[] lines = headersSection.split("\r\n");
@@ -186,7 +173,6 @@ public class HTTPParser {
                     if (contentLength < 0) {
                         return HTTPRequest.invalid(400, "Negative Content-Length");
                     }
-                  
                 } catch (NumberFormatException e) {
                     return HTTPRequest.invalid(400, "Invalid Content-Length value");
                 }
@@ -199,11 +185,6 @@ public class HTTPParser {
                     isMultipart = true;
                 }
             }
-
-            // Reject chunked encoding (defer to future work)
-            // if (isChunked) {
-            // return HTTPRequest.invalid(501, "Transfer-Encoding: chunked not supported");
-            // }
 
             // Decide streaming: POST + (large or multipart)
             boolean needsStreaming = false;
@@ -234,32 +215,12 @@ public class HTTPParser {
             req.needsStreaming = needsStreaming;
             req.valid = true;
 
+            // ...existing code...
             return req;
 
         } catch (Exception e) {
-            buffer.reset();
             return HTTPRequest.invalid(400, "Parse error: " + e.getMessage());
         }
-    }
-
-    /**
-     * Finds pattern in buffer starting from current position.
-     * Returns absolute position of pattern start, or -1 if not found.
-     * Does not modify buffer position.
-     */
-    private static int findPattern(ByteBuffer buffer, byte[] pattern) {
-        int startPos = buffer.position();
-        int limit = buffer.limit();
-
-       outer : for (int i = startPos; i <= limit - pattern.length; i++) {
-            for (int j = 0; j < pattern.length; j++) {
-                if (buffer.get(i + j) != pattern[j]) {
-                    continue outer;
-                }
-            }
-            return i;
-        }
-        return -1;
     }
 
     // Helper methods (unchanged)

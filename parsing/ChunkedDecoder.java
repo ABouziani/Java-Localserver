@@ -43,9 +43,8 @@ public class ChunkedDecoder {
             int headerEndPos = -1;
 
             try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(chunkedFile));
-                    BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile))) {
-
-                ByteArrayOutputStream decodedChunks = new ByteArrayOutputStream();
+                    BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile));
+                    ByteArrayOutputStream decodedChunks = new ByteArrayOutputStream();) {
 
                 while (true) {
 
