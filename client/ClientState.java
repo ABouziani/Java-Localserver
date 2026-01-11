@@ -12,13 +12,16 @@ import java.util.Queue;
 
 public class ClientState {
 
+public boolean closeAfterWrite;
+
+/////////////////////
     // Parsing control — NEW
     public boolean streamingActive = false; // true = skip pipelining until body complete
 
     public SocketChannel ch;
 
     // Read buffer for socket reads (80KB)
-    public ByteBuffer readBuf = ByteBuffer.allocateDirect(1024 * 8);
+    public ByteBuffer readBuf = ByteBuffer.allocateDirect(1024 * 64);
 
     // Accumulation buffer for small requests (headers / JSON)
     public ByteBuffer accumulationBuf = ByteBuffer.allocate(16 * 1024); // 16KB

@@ -21,9 +21,9 @@ public class MainServer {
     private final Selector selector;
     private final ServerManager serverManager;
     private final Map<SocketChannel, ClientState> clients = new HashMap<>();
-    private static final long SELECT_TIMEOUT_MS = 1000;
-    private static final long IDLE_TIMEOUT_MS = 10000; // headers / keep-alive
-    private static final long BODY_TIMEOUT_MS = 30000;
+    private static final long SELECT_TIMEOUT_MS = 100;
+    private static final long IDLE_TIMEOUT_MS = 40000; // headers / keep-alive
+    private static final long BODY_TIMEOUT_MS = 40000;
 
     public MainServer(Config config) throws IOException {
         this.selector = Selector.open();
@@ -69,6 +69,7 @@ public class MainServer {
 
         try {
             clientChannel.configureBlocking(false);
+            clientChannel.socket().setTcpNoDelay(true);
             ClientState state = new ClientState(clientChannel);
             state.lastActive = System.currentTimeMillis();
             clients.put(clientChannel, state);
@@ -76,6 +77,8 @@ public class MainServer {
             SelectionKey clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
             clientKey.attach(state);
         } catch (IOException e) {
+            System.out.println("Error on Handle Accept ----------------------------------------------------------------");
+            e.printStackTrace();
             closeClient(clientChannel);
             throw e;
         }
@@ -136,7 +139,6 @@ public class MainServer {
                         }
                     } catch (Exception e) {
                         System.err.println("ERROR: Failed to finalize streamed request: " + e.getMessage());
-                        e.printStackTrace();
                         sendErrorResponse(channel, state, 500,
                                 "<html><body><h1>500 Internal Server Error</h1></body></html>");
                     }
@@ -235,13 +237,15 @@ public class MainServer {
 
         } catch (RuntimeException e) {
             System.err.println("ERROR: Failed to process request: " + e.getMessage());
-            e.printStackTrace();
             String body = e.getMessage().contains("exceeds maximum")
                     ? "<html><body><h1>413 Payload Too Large</h1><p>Request size exceeds the maximum allowed.</p></body></html>"
                     : "<html><body><h1>500 Internal Server Error</h1><p>An error occurred.</p></body></html>";
             sendErrorResponse(channel, state, e.getMessage().contains("exceeds maximum") ? 413 : 500, body);
         } catch (IOException e) {
-            System.err.println("ERROR: IO exception during read: " + e.getMessage());
+            if (e instanceof java.net.SocketException && e.getMessage().contains("Connection reset")) {
+                // expected under stress, ignore or log minimally
+                System.out.println("Client closed connection prematurely (expected under stress).");
+            } 
             closeClient(channel);
         }
     }
@@ -257,7 +261,11 @@ public class MainServer {
         resp.headers.put("Content-Length", String.valueOf(body.getBytes(StandardCharsets.UTF_8).length));
 
         state.pending.add(resp);
-        channel.register(selector, SelectionKey.OP_WRITE);
+        //channel.register(selector, SelectionKey.OP_WRITE);
+        SelectionKey key = channel.keyFor(selector);
+        if (key != null && key.isValid()) {
+            key.interestOps(SelectionKey.OP_WRITE);
+        }
         state.clearAccumulation();
         state.resetBodyState();
     }
@@ -265,24 +273,47 @@ public class MainServer {
     private void handleWrite(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();
         ClientState state = clients.get(channel);
-        if (state == null) {
-            closeClient(channel);
-            return;
-        }
-        if (state.pending.isEmpty()) {
-            channel.register(selector, SelectionKey.OP_READ);
-            return;
-        }
-        // if more pending, keep OP_WRITE
-        if (!state.pending.isEmpty()) {
-            channel.register(selector, SelectionKey.OP_WRITE);
-        } else {
-            channel.register(selector, SelectionKey.OP_READ);
-        }
+        try {
 
-        String listenAddress = state.getListenAddress();
-        VirtualServer server = serverManager.getServer(listenAddress);
-        server.write(channel, state);
+            if (state == null) {
+                closeClient(channel);
+                return;
+            }
+            if (state.pending.isEmpty()) {
+                SelectionKey key2 = channel.keyFor(selector);
+                if (key2 != null && key2.isValid()) {
+                    key2.interestOps(SelectionKey.OP_READ);
+                }
+                return;
+            }
+            // if more pending, keep OP_WRITE
+            if (!state.pending.isEmpty()) {
+                SelectionKey key2 = channel.keyFor(selector);
+                if (key2 != null && key2.isValid()) {
+                    key2.interestOps(SelectionKey.OP_WRITE);
+                }
+            } else {
+                SelectionKey key2 = channel.keyFor(selector);
+                if (key2 != null && key2.isValid()) {
+                    key2.interestOps(SelectionKey.OP_READ);
+                }
+            }
+
+            String listenAddress = state.getListenAddress();
+            VirtualServer server = serverManager.getServer(listenAddress);
+            server.write(channel, state);
+            if (state != null && state.closeAfterWrite) {
+                key.cancel();
+                closeClient((SocketChannel) key.channel());
+                return;
+            }
+        } catch (IOException e) {
+            if (e instanceof java.net.SocketException && e.getMessage().contains("Connection reset")) {
+                // expected under stress, ignore or log minimally
+                System.out.println("Client closed connection prematurely (expected under stress).");
+            } 
+            closeClient(channel);
+        }
     }
 
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
@@ -291,12 +322,29 @@ public class MainServer {
             return;
         }
         st.pending.add(resp);
-        sc.register(selector, SelectionKey.OP_WRITE);
+        SelectionKey key = sc.keyFor(selector);
+        if (key != null && key.isValid()) {
+            key.interestOps(SelectionKey.OP_WRITE);
+        }
+
+        //sc.register(selector, SelectionKey.OP_WRITE);
     }
 
-    public void closeClient(SocketChannel sc) throws IOException {
+    public void xcloseClient(SocketChannel sc) throws IOException {
         clients.remove(sc);
         sc.close();
+    }
+
+    public void closeClient(SocketChannel sc) {
+        try {
+            SelectionKey key = sc.keyFor(selector);
+            if (key != null) {
+                key.cancel();
+            }
+            clients.remove(sc);
+            sc.close();
+        } catch (IOException ignored) {
+        }
     }
 
     private void checkTimeouts(long now) {

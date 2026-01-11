@@ -56,7 +56,6 @@ public class VirtualServer {
     public void read(HTTPRequest req, ClientState state, SocketChannel sc) throws IOException {
         System.out.println("➡️ Dispatching request: " + req.path);
         // No body length check — handled by parser (Content-Length validation)
-        
 
         try {
             handleRequest(sc, req, state);
@@ -76,7 +75,7 @@ public class VirtualServer {
         }
     }
 
-    public void write(SocketChannel sc, ClientState state) throws IOException {
+    public void wwrite(SocketChannel sc, ClientState state) throws IOException {
 
         if (state.pending.isEmpty()) {
             return;
@@ -107,8 +106,8 @@ public class VirtualServer {
             }
             state.pending.poll();
             // if (!resp.keepAlive) {
-                mainServer.closeClient(sc);
-                // return;
+            mainServer.closeClient(sc);
+            // return;
             // }
         } else {
             // streamed body (file)
@@ -131,13 +130,110 @@ public class VirtualServer {
 
     }
 
+    public void write(SocketChannel sc, ClientState state) throws IOException {
+
+        if (state.pending.isEmpty()) {
+            return;
+        }
+
+        HTTPResponse resp = state.pending.peek();
+
+        //WRITE HEADERS
+        if (!resp.sentHeader) {
+            if (state.writeBuf == null) {
+                byte[] headerBytes = resp.toHeaderBytes();
+                state.writeBuf = ByteBuffer.wrap(headerBytes);
+            }
+
+            sc.write(state.writeBuf);
+
+            if (state.writeBuf.hasRemaining()) {
+                // partial header write
+                return;
+            }
+
+            // header fully written
+            state.writeBuf = null;
+            resp.sentHeader = true;
+        }
+
+        //WRITE BODY (NON-STREAMED)
+        if (!resp.streamed) {
+            if (resp.body != null) {
+                if (state.writeBuf == null) {
+                    state.writeBuf = ByteBuffer.wrap(
+                            resp.body.getBytes(StandardCharsets.UTF_8)
+                    );
+                }
+
+                sc.write(state.writeBuf);
+
+                if (state.writeBuf.hasRemaining()) {
+                    // partial body write
+                    return;
+                }
+
+                // body fully written
+                state.writeBuf = null;
+            }
+
+            // response fully sent
+            state.pending.poll();
+
+            if (!resp.keepAlive) {
+                state.closeAfterWrite = true;
+            }
+
+            return;
+        }
+
+        //WRITE BODY (STREAMED FILE)
+        if (resp.fileChannel == null) {
+            resp.fileChannel = FileChannel.open(
+                    resp.file.toPath(),
+                    StandardOpenOption.READ
+            );
+            resp.filePos = 0;
+        }
+
+        long transferred = resp.fileChannel.transferTo(
+                resp.filePos,
+                8192,
+                sc
+        );
+
+        if (transferred == 0) {
+            // socket not ready for more data
+            return;
+        }
+
+        resp.filePos += transferred;
+
+        if (resp.filePos < resp.file.length()) {
+            // file not finished yet
+            return;
+        }
+
+        // file fully sent
+        resp.fileChannel.close();
+        resp.fileChannel = null;
+
+        state.pending.poll();
+
+        if (!resp.keepAlive) {
+            state.closeAfterWrite = true;
+        }
+
+    }
+
     private void handleRequest(SocketChannel sc, HTTPRequest req, ClientState state) throws IOException {
 
         // sessions
         String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
         Session sess = null;
-        if (sid != null)
+        if (sid != null) {
             sess = sessionManager.get(sid);
+        }
         /*if ((req.method.equals("POST") || req.method.equals("DELETE")) && sid == null){
             mainServer.enqueueResponse(sc,HTTPResponse.error(403, config));
             return;
@@ -145,7 +241,6 @@ public class VirtualServer {
         if (sess == null) {
             sess = sessionManager.create();
         }
-
 
         HTTPResponse resp = router.route(req, sess, cgiHandler);
         // set session cookie

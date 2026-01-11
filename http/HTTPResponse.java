@@ -1,5 +1,6 @@
 package http;
 
+import configurations.ServerConfig;
 import java.io.File;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -11,9 +12,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
-import configurations.ServerConfig;
-
 public class HTTPResponse {
+
     public int status;
     public Map<String, String> headers = new HashMap<>();
     public String body = null;

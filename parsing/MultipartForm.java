@@ -1,9 +1,8 @@
 package parsing;
 
+import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
-import routing.Route;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -11,8 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
-
-import configurations.ServerConfig;
+import routing.Route;
 
 public class MultipartForm {
 
@@ -354,7 +352,6 @@ public class MultipartForm {
                         }
                     } catch (Exception e) {
                         // Continue to fallback
-                        e.printStackTrace();
                     }
                 }
             }

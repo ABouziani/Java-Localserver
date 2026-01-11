@@ -1,5 +1,7 @@
 package core;
 
+import configurations.Config;
+import configurations.ServerConfig;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
@@ -11,9 +13,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import configurations.Config;
-import configurations.ServerConfig;
 
 public class ServerManager {
     private final List<VirtualServer> virtualServers = new ArrayList<>();
@@ -48,7 +47,7 @@ public class ServerManager {
                         portscreated.add(port);
                         ServerSocketChannel serverChannel = ServerSocketChannel.open();
                         serverChannel.configureBlocking(false);
-                        serverChannel.bind(new InetSocketAddress(port));
+                        serverChannel.bind(new InetSocketAddress(port),1024);
                         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
                     }
                 }
