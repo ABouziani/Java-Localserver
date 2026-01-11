@@ -208,7 +208,7 @@ public class HTTPParser {
             // Decide streaming: POST + (large or multipart)
             boolean needsStreaming = false;
             if (method.equals("POST")) {
-                if (isMultipart || (contentLength > 1024 * 1024) || isChunked) {
+                if (isMultipart || (contentLength > 0) || isChunked) {
                     needsStreaming = true;
                 }
             }

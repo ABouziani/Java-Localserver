@@ -1,6 +1,9 @@
 package parsing;
 
 import http.HTTPRequest;
+import http.HTTPResponse;
+import routing.Route;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -8,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
+
+import configurations.ServerConfig;
 
 public class MultipartForm {
 
@@ -126,7 +131,7 @@ public class MultipartForm {
             FilePart fp = new FilePart();
             fp.filename = fn;
             fp.name = name;
-            fp.data = body;  // ✅ raw bytes — no corruption
+            fp.data = body; // ✅ raw bytes — no corruption
             return fp;
         }
 
@@ -201,107 +206,287 @@ public class MultipartForm {
     }
 
     public static void saveRawFile(HTTPRequest req, String uploadDir) throws IOException {
-    if (req.tempFilePath == null) throw new IOException("No temp file");
+        if (req.tempFilePath == null)
+            throw new IOException("No temp file");
 
-    // 1. Extract filename from headers (minimal read)
-    String filename = "upload.bin";
-    long bodyStart = 0;
+        // 1. Extract filename from headers (minimal read)
+        String filename = "upload.bin";
+        long bodyStart = 0;
 
-    try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
-        ByteBuffer buf = ByteBuffer.allocate(1024);
-        StringBuilder headers = new StringBuilder();
-        boolean foundEnd = false;
+        try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
+            ByteBuffer buf = ByteBuffer.allocate(1024);
+            StringBuilder headers = new StringBuilder();
+            boolean foundEnd = false;
 
-        while (!foundEnd && fc.read(buf) > 0) {
-            buf.flip();
-            for (int i = 0; i < buf.remaining() - 3; i++) {
-                if (buf.get(i) == '\r' && buf.get(i + 1) == '\n'
-                    && buf.get(i + 2) == '\r' && buf.get(i + 3) == '\n') {
-                    // Found \r\n\r\n — end of headers
-                    byte[] hdrBytes = new byte[i];
-                    buf.rewind();
-                    buf.get(hdrBytes, 0, i);
-                    String headerStr = new String(hdrBytes, StandardCharsets.ISO_8859_1);
+            while (!foundEnd && fc.read(buf) > 0) {
+                buf.flip();
+                for (int i = 0; i < buf.remaining() - 3; i++) {
+                    if (buf.get(i) == '\r' && buf.get(i + 1) == '\n'
+                            && buf.get(i + 2) == '\r' && buf.get(i + 3) == '\n') {
+                        // Found \r\n\r\n — end of headers
+                        byte[] hdrBytes = new byte[i];
+                        buf.rewind();
+                        buf.get(hdrBytes, 0, i);
+                        String headerStr = new String(hdrBytes, StandardCharsets.ISO_8859_1);
 
-                    // Extract filename="..."
-                    int fnIdx = headerStr.indexOf("filename=\"");
-                    if (fnIdx != -1) {
-                        int start = fnIdx + 10;
-                        int end = headerStr.indexOf('"', start);
-                        if (end > start) {
-                            filename = headerStr.substring(start, end);
+                        // Extract filename="..."
+                        int fnIdx = headerStr.indexOf("filename=\"");
+                        if (fnIdx != -1) {
+                            int start = fnIdx + 10;
+                            int end = headerStr.indexOf('"', start);
+                            if (end > start) {
+                                filename = headerStr.substring(start, end);
+                            }
                         }
-                    }
 
-                    bodyStart = fc.position() - (buf.remaining() - (i + 4));
-                    foundEnd = true;
-                    break;
+                        bodyStart = fc.position() - (buf.remaining() - (i + 4));
+                        foundEnd = true;
+                        break;
+                    }
                 }
-            }
-            if (!foundEnd) {
-                headers.append(StandardCharsets.ISO_8859_1.decode(buf));
-                buf.compact();
+                if (!foundEnd) {
+                    headers.append(StandardCharsets.ISO_8859_1.decode(buf));
+                    buf.compact();
+                }
             }
         }
-    }
 
-    // 2. Sanitize filename
-    String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
-    if (safeName.isEmpty()) safeName = "upload.bin";
+        // 2. Sanitize filename
+        String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
+        if (safeName.isEmpty())
+            safeName = "upload.bin";
 
-    // 3. Stream body (skip headers, trim final \r\n--boundary)
-    Path out = Path.of(uploadDir, safeName).toAbsolutePath();
-    Files.createDirectories(out.getParent());
+        // 3. Stream body (skip headers, trim final \r\n--boundary)
+        Path out = Path.of(uploadDir, safeName).toAbsolutePath();
+        Files.createDirectories(out.getParent());
 
-    try (FileChannel src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
-         FileChannel dest = FileChannel.open(out, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+        try (FileChannel src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
+                FileChannel dest = FileChannel.open(out, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
 
-        // Get boundary
-        String ct = req.headers.getOrDefault("content-type", "");
-        int i = ct.indexOf("boundary=");
-        if (i == -1) throw new IOException("No boundary");
-        String boundary = "--" + ct.substring(i + 9).trim() + "--";
-        byte[] finalBoundary = ("\r\n" + boundary).getBytes(StandardCharsets.ISO_8859_1);
+            // Get boundary
+            String ct = req.headers.getOrDefault("content-type", "");
+            int i = ct.indexOf("boundary=");
+            if (i == -1)
+                throw new IOException("No boundary");
+            String boundary = "--" + ct.substring(i + 9).trim() + "--";
+            byte[] finalBoundary = ("\r\n" + boundary).getBytes(StandardCharsets.ISO_8859_1);
 
-        // Find end of body (last occurrence of \r\n--boundary--)
-        long fileSize = src.size();
-        long searchStart = Math.max(0, fileSize - finalBoundary.length - 100);
-        src.position(searchStart);
+            // Find end of body (last occurrence of \r\n--boundary--)
+            long fileSize = src.size();
+            long searchStart = Math.max(0, fileSize - finalBoundary.length - 100);
+            src.position(searchStart);
 
-        ByteBuffer tail = ByteBuffer.allocate((int) (fileSize - searchStart));
-        src.read(tail);
-        tail.flip();
+            ByteBuffer tail = ByteBuffer.allocate((int) (fileSize - searchStart));
+            src.read(tail);
+            tail.flip();
 
-        int boundaryPos = -1;
-        for (int p = tail.remaining() - finalBoundary.length; p >= 0; p--) {
-            boolean match = true;
-            for (int b = 0; b < finalBoundary.length; b++) {
-                if (tail.get(p + b) != finalBoundary[b]) {
-                    match = false;
+            int boundaryPos = -1;
+            for (int p = tail.remaining() - finalBoundary.length; p >= 0; p--) {
+                boolean match = true;
+                for (int b = 0; b < finalBoundary.length; b++) {
+                    if (tail.get(p + b) != finalBoundary[b]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    boundaryPos = p;
                     break;
                 }
             }
-            if (match) {
-                boundaryPos = p;
+
+            long bodyEnd = fileSize;
+            if (boundaryPos != -1) {
+                bodyEnd = searchStart + boundaryPos;
+            }
+
+            // Stream body
+            src.position(bodyStart);
+            long bodySize = bodyEnd - bodyStart;
+            long transferred = 0;
+            while (transferred < bodySize) {
+                long chunk = Math.min(bodySize - transferred, 65536);
+                transferred += dest.transferFrom(src, transferred, chunk);
+            }
+        }
+
+        System.out.println("✅ Saved: " + safeName + " (" + (new java.io.File(out.toString())).length() + " bytes)");
+    }
+
+    /////////////////////////
+    public static HTTPResponse parseBody(HTTPRequest req, ServerConfig cfg, Route matched) throws IOException {
+        if (req.isChunked) {
+            String filename = req.headers.get("x-filename");
+
+            if (filename == null || filename.isEmpty()) {
+                if (req.tempFilePath != null && Files.exists(req.tempFilePath)) {
+                    try {
+                        byte[] fileBuf = new byte[500];
+                        int readLen = (int) Math.min(fileBuf.length, Files.size(req.tempFilePath));
+                        try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
+                            fc.read(ByteBuffer.wrap(fileBuf), 0);
+                        }
+
+                        int firstCRLF = -1;
+                        for (int i = 0; i < readLen - 1; i++) {
+                            if (fileBuf[i] == '\r' && fileBuf[i + 1] == '\n') {
+                                firstCRLF = i;
+                                break;
+                            }
+                        }
+
+                        if (firstCRLF > 0) {
+                            int dataStart = firstCRLF + 2;
+
+                            // Search for Content-Disposition in the next chunk data
+                            int searchLimit = Math.min(readLen, dataStart + 2048);
+                            String searchData = new String(fileBuf, dataStart,
+                                    Math.min(2000, searchLimit - dataStart), StandardCharsets.ISO_8859_1);
+
+                            int fnIdx = searchData.indexOf("filename=\"");
+                            if (fnIdx != -1) {
+                                int start = fnIdx + 10;
+                                int end = searchData.indexOf('"', start);
+                                if (end > start && end - start < 256) {
+                                    filename = searchData.substring(start, end);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Continue to fallback
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            // If still no filename found, generate from Content-Type header
+            if (filename == null || filename.isEmpty()) {
+                String contentType = req.headers.getOrDefault("content-type", "application/octet-stream");
+                filename = generateFilenameFromContentType(contentType);
+            }
+
+            String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
+            Path out = Path.of("upload", safeName).toAbsolutePath();
+            Files.createDirectories(out.getParent());
+            return ChunkedDecoder.saveChunked(req, cfg, out);
+        }
+
+        byte[] headerBuf = new byte[4096];
+        int headerLen = (int) Math.min(4096, Files.size(req.tempFilePath));
+        try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
+            fc.read(ByteBuffer.wrap(headerBuf), 0);
+        }
+        if (req.tempFilePath == null || !Files.exists(req.tempFilePath)) {
+            return HTTPResponse.error(500, cfg);
+        }
+
+        int headerEnd = -1;
+        for (int i = 0; i <= headerLen - 4; i++) {
+            if (headerBuf[i] == '\r' && headerBuf[i + 1] == '\n'
+                    && headerBuf[i + 2] == '\r' && headerBuf[i + 3] == '\n') {
+                headerEnd = i + 4; // skip \r\n\r\n
                 break;
             }
         }
-
-        long bodyEnd = fileSize;
-        if (boundaryPos != -1) {
-            bodyEnd = searchStart + boundaryPos;
+        if (headerEnd == -1) {
+            return HTTPResponse.error(400, cfg);
         }
 
-        // Stream body
-        src.position(bodyStart);
-        long bodySize = bodyEnd - bodyStart;
-        long transferred = 0;
-        while (transferred < bodySize) {
-            long chunk = Math.min(bodySize - transferred, 65536);
-            transferred += dest.transferFrom(src, transferred, chunk);
+        // 2. Extract filename from body, or generate from Content-Type
+        String headers = new String(headerBuf, 0, headerEnd, StandardCharsets.ISO_8859_1);
+        String filename = null;
+        int fnIdx = headers.indexOf("filename=\"");
+        if (fnIdx != -1) {
+            int start = fnIdx + 10;
+            int end = headers.indexOf('"', start);
+            if (end > start) {
+                filename = headers.substring(start, end);
+            }
         }
+
+        // If no filename found, generate from Content-Type header
+        if (filename == null || filename.isEmpty()) {
+            String contentType = req.headers.getOrDefault("content-type", "application/octet-stream");
+            filename = generateFilenameFromContentType(contentType);
+        }
+
+        long bsize = headers.split("\r\n")[0].length() + 5;
+
+        // 3. ✅ CRITICAL: Use Content-Length for body size
+        long bodySize = req.expectedContentLength - headerEnd - bsize; // ← from HTTPParser
+        // System.out.print(bodySize);
+        if (bodySize <= 0) {
+            return HTTPResponse.error(400, cfg);
+        }
+
+        // 4. Save body: [headerEnd, headerEnd + bodySize)
+        String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
+        Path out = Path.of("upload", safeName).toAbsolutePath();
+        Files.createDirectories(out.getParent());
+        try (var src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
+                FileChannel dest = FileChannel.open(out,
+                        StandardOpenOption.CREATE, // create if not exists
+                        StandardOpenOption.WRITE, // open for writing
+                        StandardOpenOption.TRUNCATE_EXISTING)) {
+            src.position(headerEnd);
+            long transferred = 0;
+            if (bodySize <= 0) {
+                System.err.println("⚠️ bodySize = " + bodySize + ", skipping transfer");
+                // Still create empty file
+                Files.write(out, new byte[0]);
+            } else {
+                while (transferred < bodySize) {
+                    long chunk = Math.min(bodySize - transferred, 65536);
+                    if (chunk <= 0) {
+                        break; // safety
+
+                    }
+                    long written = dest.transferFrom(src, transferred, chunk);
+                    if (written <= 0) {
+                        break; // EOF
+
+                    }
+                    transferred += written;
+                }
+                System.out.println("✅ Transferred: " + transferred + "/" + bodySize);
+            }
+        }
+
+        System.out.println("✅ Saved " + safeName + " (" + bodySize + " bytes)");
+        if (matched.redirect != null) {
+            return HTTPResponse.redirect(matched.redirect);
+        }
+
+        return null;
     }
 
-    System.out.println("✅ Saved: " + safeName + " (" + (new java.io.File(out.toString())).length() + " bytes)");
-}
+    private static String generateFilenameFromContentType(String contentType) {
+        // Extract the base type (without parameters like charset)
+        String type = contentType.split(";")[0].trim();
+
+        // Map content types to file extensions
+        String extension = switch (type.toLowerCase()) {
+            case "image/png" -> ".png";
+            case "image/jpeg", "image/jpg" -> ".jpg";
+            case "image/gif" -> ".gif";
+            case "image/webp" -> ".webp";
+            case "application/pdf" -> ".pdf";
+            case "application/json" -> ".json";
+            case "application/xml", "text/xml" -> ".xml";
+            case "text/plain" -> ".txt";
+            case "text/html" -> ".html";
+            case "text/csv" -> ".csv";
+            case "application/zip" -> ".zip";
+            case "application/x-gzip", "application/gzip" -> ".gz";
+            case "video/mp4" -> ".mp4";
+            case "audio/mpeg" -> ".mp3";
+            case "audio/wav" -> ".wav";
+            default -> ".bin";
+        };
+
+        // Generate filename with timestamp
+        long timestamp = System.currentTimeMillis();
+        return "upload_" + timestamp + extension;
+    }
+
 }
