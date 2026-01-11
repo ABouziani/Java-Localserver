@@ -12,23 +12,21 @@ public class HTTPParser {
     private static final int MAX_HEADERS_SIZE = 16384;
     private static final int MAX_URI_LENGTH = 8192;
 
-
     public static HTTPRequest tryParse(ByteBuffer buffer) {
         if (buffer == null || !buffer.hasRemaining()) {
             return null;
         }
 
         try {
-            // Convert buffer to string
+            int startPos = buffer.position();
             byte[] data = new byte[buffer.remaining()];
             buffer.get(data);
             String rawData = new String(data, StandardCharsets.UTF_8);
 
-            // Find end of headers (\r\n\r\n)
             int headersEnd = rawData.indexOf("\r\n\r\n");
             if (headersEnd == -1) {
-                buffer.position(buffer.position() - data.length); // Restore position
-                return null; // Incomplete headers
+                buffer.position(startPos); // ✅ Restore to start
+                return null;
             }
 
             String headersSection = rawData.substring(0, headersEnd);
