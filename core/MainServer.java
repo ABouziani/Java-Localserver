@@ -130,7 +130,14 @@ public class MainServer {
                                         "<html><body><h1>404 Not Found</h1></body></html>");
                                 return;
                             }
-
+                            if (!server.getIsDefault() && !server.getPorts().contains(state.portActive)){
+                                System.err.println("Warning: The requested port " + state.portActive + " is not in the server's configured ports.");
+                                sendErrorResponse(channel, state, 400,
+                                    "<html><body><h1>400 Bad Request</h1>" +
+                                    "<p>Invalid port: " + state.portActive + "</p>" +
+                                    "</body></html>");
+                                return;
+                            }
                             // Dispatch to server — handler can read req.tempFilePath
                             server.read(req, state, channel);
 
