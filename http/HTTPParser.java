@@ -11,43 +11,52 @@ public class HTTPParser {
     private static final int MAX_HEADER_LINE_LENGTH = 8192;
     private static final int MAX_HEADERS_SIZE = 16384;
     private static final int MAX_URI_LENGTH = 8192;
-    private static final byte[] DOUBLE_CRLF = "\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
-    /**
-     * Parses HTTP request headers only.
-     * Returns HTTPRequest with metadata (may need streaming), or null if
-     * incomplete/invalid.
-     * Advances buffer position to start of body (or end of headers if no body).
-     */
+    // Headers that CANNOT be combined (RFC 7230)
+    private static final java.util.Set<String> NO_COMBINE_HEADERS = new java.util.HashSet<>(
+            java.util.Arrays.asList(
+                    "host",
+                    "content-length",
+                    "content-type",
+                    "transfer-encoding",
+                    "connection",
+                    "upgrade",
+                    "te",
+                    "trailer",
+                    "authorization",
+                    "proxy-authorization",
+                    "www-authenticate",
+                    "proxy-authenticate",
+                    "age",
+                    "cache-control",
+                    "expires",
+                    "date",
+                    "location",
+                    "retry-after",
+                    "vary",
+                    "warning"));
+
     public static HTTPRequest tryParse(ByteBuffer buffer) {
         if (buffer == null || !buffer.hasRemaining()) {
             return null;
         }
-
         buffer.mark();
-        int startPos = buffer.position();
-
         try {
-            // Find end of headers (\r\n\r\n)
-            int headersEnd = findPattern(buffer, DOUBLE_CRLF);
+            int startPos = buffer.position();
+            byte[] data = new byte[buffer.remaining()];
+            buffer.get(data);
+            String rawData = new String(data, StandardCharsets.UTF_8);
+
+            int headersEnd = rawData.indexOf("\r\n\r\n");
             if (headersEnd == -1) {
-                buffer.reset();
-                return null; // Incomplete headers
+                buffer.reset(); // ✅ FIX: Use reset() instead of position()
+                return null;
             }
 
-            int headersLength = headersEnd - startPos;
-            if (headersLength > MAX_HEADERS_SIZE) {
+            String headersSection = rawData.substring(0, headersEnd);
+            if (headersSection.length() > MAX_HEADERS_SIZE) {
                 return HTTPRequest.invalid(431, "Request header fields too large");
             }
-
-            // Extract headers section
-            byte[] headersBytes = new byte[headersLength];
-            buffer.position(startPos);
-            buffer.get(headersBytes);
-            String headersSection = new String(headersBytes, StandardCharsets.UTF_8);
-
-            // Skip \r\n\r\n — position now at start of body
-            buffer.position(headersEnd + 4);
 
             // Split into lines
             String[] lines = headersSection.split("\r\n");
@@ -110,14 +119,14 @@ public class HTTPParser {
             // Parse headers
             Map<String, String> headers = new HashMap<>();
             for (int i = 1; i < lines.length; i++) {
-                String line = lines[i].trim();
+                String line = lines[i]; // ✅ FIX: Don't trim yet!
                 if (line.isEmpty())
                     continue;
 
                 if (line.length() > MAX_HEADER_LINE_LENGTH) {
                     return HTTPRequest.invalid(431, "Header line too long");
                 }
-                if (line.startsWith(" ") || line.startsWith("\t")) {
+                if (line.startsWith(" ") || line.startsWith("\t")) { // ✅ Now this works!
                     return HTTPRequest.invalid(400, "Obsolete line folding detected");
                 }
 
@@ -129,8 +138,8 @@ public class HTTPParser {
                     return HTTPRequest.invalid(400, "Invalid header: empty field name");
                 }
 
-                String name = line.substring(0, colonIdx).trim();
-                String value = line.substring(colonIdx + 1).trim();
+                String name = line.substring(0, colonIdx); // ✅ FIX: Don't trim name!
+                String value = line.substring(colonIdx + 1).trim(); // Value can be trimmed
 
                 if (!isValidHeaderName(name)) {
                     return HTTPRequest.invalid(400, "Invalid header field name: " + name);
@@ -140,9 +149,18 @@ public class HTTPParser {
                 }
 
                 String normalizedName = name.toLowerCase();
-                headers.put(normalizedName, headers.containsKey(normalizedName)
-                        ? headers.get(normalizedName) + ", " + value
-                        : value);
+
+                // Check if header already exists
+                if (headers.containsKey(normalizedName)) {
+                    // If it's a no-combine header, reject
+                    if (NO_COMBINE_HEADERS.contains(normalizedName)) {
+                        return HTTPRequest.invalid(400, "Duplicate header not allowed: " + name);
+                    }
+                    // Otherwise, combine with ", "
+                    headers.put(normalizedName, headers.get(normalizedName) + ", " + value);
+                } else {
+                    headers.put(normalizedName, value);
+                }
             }
 
             // Validate Host header
@@ -186,7 +204,6 @@ public class HTTPParser {
                     if (contentLength < 0) {
                         return HTTPRequest.invalid(400, "Negative Content-Length");
                     }
-                  
                 } catch (NumberFormatException e) {
                     return HTTPRequest.invalid(400, "Invalid Content-Length value");
                 }
@@ -199,11 +216,6 @@ public class HTTPParser {
                     isMultipart = true;
                 }
             }
-
-            // Reject chunked encoding (defer to future work)
-            // if (isChunked) {
-            // return HTTPRequest.invalid(501, "Transfer-Encoding: chunked not supported");
-            // }
 
             // Decide streaming: POST + (large or multipart)
             boolean needsStreaming = false;
@@ -234,35 +246,18 @@ public class HTTPParser {
             req.needsStreaming = needsStreaming;
             req.valid = true;
 
+            // ✅ FIX: Advance buffer past consumed data!
+            buffer.position(startPos + headersEnd + 4); // +4 for "\r\n\r\n"
+
             return req;
 
         } catch (Exception e) {
-            buffer.reset();
+            buffer.reset(); // ✅ FIX: Reset on error too
             return HTTPRequest.invalid(400, "Parse error: " + e.getMessage());
         }
     }
 
-    /**
-     * Finds pattern in buffer starting from current position.
-     * Returns absolute position of pattern start, or -1 if not found.
-     * Does not modify buffer position.
-     */
-    private static int findPattern(ByteBuffer buffer, byte[] pattern) {
-        int startPos = buffer.position();
-        int limit = buffer.limit();
-
-       outer : for (int i = startPos; i <= limit - pattern.length; i++) {
-            for (int j = 0; j < pattern.length; j++) {
-                if (buffer.get(i + j) != pattern[j]) {
-                    continue outer;
-                }
-            }
-            return i;
-        }
-        return -1;
-    }
-
-    // Helper methods (unchanged)
+    // Helper methods
     private static boolean isValidMethod(String method) {
         if (method.isEmpty())
             return false;
