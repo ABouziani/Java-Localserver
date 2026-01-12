@@ -5,10 +5,10 @@
   },
   "servers": [
     {
-      "host": "www.exampl.com",
+      "host": "test.com",
       "ports": [8080,8989],
       "root": "www",
-      "clientMaxBody": 10485760000,
+      "clientMaxBody": 100000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
@@ -36,9 +36,41 @@
         }
       }
     },
+    {
+      "host": "teswt.com",
+      "ports": [8081],
+      "root": "www",
+      "clientMaxBody": 100000,
+      "errorPages": {
+        "404": "error_pages/404.html",
+        "500": "error_pages/500.html"
+      },
+      "routes": {
+        "/": {
+          "methods": ["GET"],
+          "root": "www",
+          "index": "index2.html",
+          "dirList": false,
+          "cgi": {
+            "py": "python3"
+          }
+        },
+        "/me": {
+          "methods": [
+            "GET"
+          ],
+          "root": "www",
+          "index": "err.html",
+          "dirList": false,
+          "cgi": {
+            "py": "python3"
+          }
+        }
+      }
+    },
      {
       "root": "www",
-      "clientMaxBody": 1048576000,
+      "clientMaxBody": 1000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
@@ -51,7 +83,7 @@
             "GET","POST","DELETE"
           ],
           "root": "www",
-          "index": "index.html",
+          "index": "indexx.html",
           "dirList": false,
           "cgi": {
             "py": "python3"

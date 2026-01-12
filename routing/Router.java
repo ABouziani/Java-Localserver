@@ -4,18 +4,12 @@ import cgi.CGIHandler;
 import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
-import parsing.ChunkedDecoder;
 import parsing.MultipartForm;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import session.Session;
 
 ;
@@ -55,9 +49,7 @@ public class Router {
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
-        // if (rel.equals("") || rel.equals("/")) {
-        // rel = "/" + matched.index;
-        // }
+       
         Path target = fsroot.resolve(rel).normalize();
         if (!target.startsWith(fsroot)) {
             return HTTPResponse.error(403, cfg);
@@ -85,7 +77,7 @@ public class Router {
                     if (matched.redirect != null) {
                         return HTTPResponse.redirect(matched.redirect);
                     }
-                    return HTTPResponse.error(403, cfg);
+                    return HTTPResponse.error(500, cfg);
                 }
                 if (!f.exists())
                     return HTTPResponse.error(404, cfg);

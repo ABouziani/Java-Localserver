@@ -38,17 +38,23 @@ public class ServerManager {
         Set<Integer> portscreated = new HashSet<>();
         for (VirtualServer server : virtualServers) {
             String key = server.getHost();
+            System.out.println(key);
             if (!boundAddresses.contains(key)) {
                 boundAddresses.add(key);
                 addressToServer.put(key, server);
+                Set<Integer> dup = new HashSet<>();
                 for (Integer port : server.getPorts()) {
+                    if (dup.contains(port)) {
+                        System.err.println("[WARNING] Server: " + server.getHost() + " duplicated ports will be ignored!" );
+                    }
+                    dup.add(port);
                     // Only bind once per unique ip:port
                     if (!portscreated.contains(port)){
-                        portscreated.add(port);
                         ServerSocketChannel serverChannel = ServerSocketChannel.open();
                         serverChannel.configureBlocking(false);
                         serverChannel.bind(new InetSocketAddress(port),1024);
                         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+                        portscreated.add(port);
                     }
                 }
             } else {
@@ -57,11 +63,16 @@ public class ServerManager {
                                 " - each host must be unique to one server");
             }
         }
+        if (portscreated.size() == 0) {
+            System.out.println("Error: No valid port binded, check your config!");
+            System.exit(1);
+        }
     }
 
     public VirtualServer getServer(String host) {
         
-        
+        System.out.println("--s-s-s-s-s");
+        System.out.println(host);
         VirtualServer server = addressToServer.get(host);
 
         if (server == null) {
