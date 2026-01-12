@@ -37,8 +37,7 @@ public class MainServer {
         // Main event loop
         while (true) {
             selector.select(SELECT_TIMEOUT_MS);
-            long now = System.currentTimeMillis();
-            checkTimeouts(now);
+            checkTimeouts(System.currentTimeMillis());
 
             Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
 
