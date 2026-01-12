@@ -90,7 +90,6 @@ public class VirtualServer {
             sc.write(state.writeBuf);
             if (state.writeBuf.hasRemaining()) {
                 return; // partial
-
             }
             state.writeBuf = null;
         }
@@ -105,10 +104,7 @@ public class VirtualServer {
                 state.writeBuf = null;
             }
             state.pending.poll();
-            // if (!resp.keepAlive) {
             mainServer.closeClient(sc);
-            // return;
-            // }
         } else {
             // streamed body (file)
             if (resp.fileChannel == null) {

@@ -98,6 +98,7 @@ public class MainServer {
             }
 
             if (bytesRead == 0) {
+                closeClient(channel);
                 return;
             }
 
@@ -335,6 +336,7 @@ public class MainServer {
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
         ClientState st = clients.get(sc);
         if (st == null) {
+            closeClient(sc);
             return;
         }
         st.pending.add(resp);
@@ -353,6 +355,10 @@ public class MainServer {
 
     public void closeClient(SocketChannel sc) {
         try {
+            if (sc == null) {
+                clients.remove(sc);
+                return;
+            } 
             SelectionKey key = sc.keyFor(selector);
             if (key != null) {
                 key.cancel();
