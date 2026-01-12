@@ -14,8 +14,6 @@ public class ClientState {
 
 public boolean closeAfterWrite;
 
-/////////////////////
-    // Parsing control — NEW
     public boolean streamingActive = false; // true = skip pipelining until body complete
 
     public SocketChannel ch;

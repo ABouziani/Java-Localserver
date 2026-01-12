@@ -138,8 +138,8 @@ public class HTTPParser {
                     return HTTPRequest.invalid(400, "Invalid header: empty field name");
                 }
 
-                String name = line.substring(0, colonIdx); // ✅ FIX: Don't trim name!
-                String value = line.substring(colonIdx + 1).trim(); // Value can be trimmed
+                String name = line.substring(0, colonIdx); 
+                String value = line.substring(colonIdx + 1).trim(); 
 
                 if (!isValidHeaderName(name)) {
                     return HTTPRequest.invalid(400, "Invalid header field name: " + name);
@@ -152,7 +152,6 @@ public class HTTPParser {
 
                 // Check if header already exists
                 if (headers.containsKey(normalizedName)) {
-                    // If it's a no-combine header, reject
                     if (NO_COMBINE_HEADERS.contains(normalizedName)) {
                         return HTTPRequest.invalid(400, "Duplicate header not allowed: " + name);
                     }
@@ -246,13 +245,12 @@ public class HTTPParser {
             req.needsStreaming = needsStreaming;
             req.valid = true;
 
-            // ✅ FIX: Advance buffer past consumed data!
-            buffer.position(startPos + headersEnd + 4); // +4 for "\r\n\r\n"
+            buffer.position(startPos + headersEnd + 4); 
 
             return req;
 
         } catch (Exception e) {
-            buffer.reset(); // ✅ FIX: Reset on error too
+            buffer.reset(); 
             return HTTPRequest.invalid(400, "Parse error: " + e.getMessage());
         }
     }
