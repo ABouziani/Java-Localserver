@@ -230,10 +230,10 @@ public class VirtualServer {
         if (sid != null) {
             sess = sessionManager.get(sid);
         }
-        /*if ((req.method.equals("POST") || req.method.equals("DELETE")) && sid == null){
+        if ((req.method.equals("DELETE")) && sid == null){
             mainServer.enqueueResponse(sc,HTTPResponse.error(403, config));
             return;
-        }*/
+        }
         if (sess == null) {
             sess = sessionManager.create();
         }
