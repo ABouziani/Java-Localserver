@@ -6,6 +6,7 @@ import java.util.Map;
 
 public class ConfigParser {
 
+    @SuppressWarnings("unchecked")
     public static Map<String, Object> parse(String s) {
         // CHANGE 1: Added protection against null or empty input strings
         if (s == null || s.trim().isEmpty()) {

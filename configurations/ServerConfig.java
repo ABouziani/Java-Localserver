@@ -43,7 +43,7 @@ public class ServerConfig {
         // CHECK: ports
         // ===============================
         if (this.isdefault && m.containsKey("ports")) {
-            System.out.println("[WARNING] Default server should not define ports");
+            System.err.println("[WARNING] Default server should not define ports");
         } else if (m.containsKey("ports")) {
 
             Object o = m.get("ports");
@@ -105,9 +105,9 @@ public class ServerConfig {
 
             String h = ((String) hostObj).trim();
 
-            // CHECK: empty host
-            if (h.isEmpty()) {
-                System.err.println("[ERROR] host is empty");
+            // CHECK: is host valid
+            if (!HostValidator.isValidHostHeader(h)) {
+                System.err.println("[ERROR] host is not valid");
                 return null;
             }
             
@@ -160,8 +160,8 @@ public class ServerConfig {
             }
 
             // CHECK: max allowed size (10MB)
-            if (size > 10 * 1024 * 1024) {
-                System.err.println("[ERROR] clientMaxBody exceeds 10MB");
+            if (size > 100 * 1024 * 1024) {
+                System.err.println("[ERROR] clientMaxBody exceeds 100MB");
                 return null;
             }
 

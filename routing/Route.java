@@ -17,6 +17,8 @@ public class Route {
     public static Route fromMap(Map<String,Object> m) {
         Route r = new Route();
         if (m.containsKey("methods")) {
+        
+            @SuppressWarnings("unchecked")
             ArrayList<Object> a = (ArrayList<Object>) m.get("methods");
             for (Object o: a) r.methods.add(((String)o).toUpperCase());
         }
@@ -24,6 +26,7 @@ public class Route {
         if (m.containsKey("index")) r.index = (String)m.get("index");
         if (m.containsKey("dirList")) r.dirList = (Boolean)m.get("dirList");
         if (m.containsKey("cgi")) {
+            @SuppressWarnings("unchecked")
             Map<String,Object> cc = (Map<String,Object>) m.get("cgi");
             for (var e: cc.entrySet()) r.cgi.put(e.getKey(), (String)e.getValue());
         }

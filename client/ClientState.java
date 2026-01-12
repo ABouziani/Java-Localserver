@@ -17,7 +17,7 @@ public boolean closeAfterWrite;
     public boolean streamingActive = false; // true = skip pipelining until body complete
 
     public SocketChannel ch;
-
+    public int portActive;
     // Read buffer for socket reads (80KB)
     public ByteBuffer readBuf = ByteBuffer.allocateDirect(1024 * 64);
 
@@ -58,8 +58,9 @@ public boolean closeAfterWrite;
     private int lastBytesPos = 0;
     private boolean atLineStart = true; // Track if we're at the start of a line
 
-    public ClientState(SocketChannel ch) {
+    public ClientState(SocketChannel ch,int port) {
         this.ch = ch;
+        this.portActive = port;
     }
 
     public void appendToAccumulation() throws IOException {

@@ -20,6 +20,7 @@ public class ConfigLoader {
                     for (Object item : rawList) {
                         
                         if (item instanceof Map) {
+                            @SuppressWarnings("unchecked")
                             Map<String,Object> map = (Map<String,Object>) item; 
                             ServerConfig cfg = new ServerConfig().fromMap(map);
                             if (cfg != null) {

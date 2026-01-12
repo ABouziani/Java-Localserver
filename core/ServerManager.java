@@ -38,29 +38,24 @@ public class ServerManager {
         Set<Integer> portscreated = new HashSet<>();
         for (VirtualServer server : virtualServers) {
             String key = server.getHost();
-            System.out.println(key);
+            addressToServer.put(key, server);
             if (!boundAddresses.contains(key)) {
                 boundAddresses.add(key);
-                addressToServer.put(key, server);
-                Set<Integer> dup = new HashSet<>();
                 for (Integer port : server.getPorts()) {
-                    if (dup.contains(port)) {
-                        System.err.println("[WARNING] Server: " + server.getHost() + " duplicated ports will be ignored!" );
-                    }
-                    dup.add(port);
-                    // Only bind once per unique ip:port
-                    if (!portscreated.contains(port)){
+                    // bind socket to one port
+                    if (!portscreated.contains(port)) {
+                        addressToServer.put(key + ":" + port, server);
                         ServerSocketChannel serverChannel = ServerSocketChannel.open();
                         serverChannel.configureBlocking(false);
-                        serverChannel.bind(new InetSocketAddress(port),1024);
+                        serverChannel.bind(new InetSocketAddress(port), 1024);
                         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
                         portscreated.add(port);
                     }
                 }
             } else {
-                throw new IllegalArgumentException(
-                        "Duplicate host address: " + key +
-                                " - each host must be unique to one server");
+                // host must be unique
+                System.err.println("[Error] Server: Duplicate host address" +
+                                        key + "- each host must be unique to one server");
             }
         }
         if (portscreated.size() == 0) {
@@ -70,15 +65,9 @@ public class ServerManager {
     }
 
     public VirtualServer getServer(String host) {
-        
-        System.out.println("--s-s-s-s-s");
-        System.out.println(host);
         VirtualServer server = addressToServer.get(host);
 
         if (server == null) {
-            //System.err.println("Warning: No server found for address " + host +
-                    //", using default");
-
             return defaultServer;
         }
         return server;

@@ -6,6 +6,7 @@ import http.HTTPParser;
 import http.HTTPRequest;
 import http.HTTPResponse;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -70,14 +71,14 @@ public class MainServer {
         try {
             clientChannel.configureBlocking(false);
             clientChannel.socket().setTcpNoDelay(true);
-            ClientState state = new ClientState(clientChannel);
+            int port = ((InetSocketAddress) serverChannel.getLocalAddress()).getPort();
+            ClientState state = new ClientState(clientChannel,port);
             state.lastActive = System.currentTimeMillis();
             clients.put(clientChannel, state);
 
             SelectionKey clientKey = clientChannel.register(selector, SelectionKey.OP_READ);
             clientKey.attach(state);
         } catch (IOException e) {
-            System.out.println("Error on Handle Accept ----------------------------------------------------------------");
             e.printStackTrace();
             closeClient(clientChannel);
             throw e;
@@ -174,6 +175,14 @@ public class MainServer {
                     System.err.println("Warning: No server found for host: " + host);
                     sendErrorResponse(channel, state, 404,
                             "<html><body><h1>404 Not Found</h1></body></html>");
+                    return;
+                }
+                if (!server.getIsDefault() && !server.getPorts().contains(state.portActive)){
+                    System.err.println("Warning: The requested port " + state.portActive + " is not in the server's configured ports.");
+                    sendErrorResponse(channel, state, 400,
+                        "<html><body><h1>400 Bad Request</h1>" +
+                        "<p>Invalid port: " + state.portActive + "</p>" +
+                        "</body></html>");
                     return;
                 }
                 state.setListenAddress(host);
