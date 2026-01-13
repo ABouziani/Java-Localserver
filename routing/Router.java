@@ -58,7 +58,6 @@ public class Router {
             rel = rel.substring(1);
         }
         Path target = fsroot.resolve(rel).normalize();
-        System.out.println(target + fsroot.toString());
         if (!target.startsWith(fsroot)) {
             return HTTPResponse.error(403, cfg);
         }

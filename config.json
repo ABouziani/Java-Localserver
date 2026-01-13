@@ -28,7 +28,7 @@
             "GET"
           ],
           "root": "www",
-          "index": "err.html",
+          "index": "me.py",
           "dirList": false,
           "cgi": {
             "py": "python3"
@@ -94,7 +94,7 @@
             "POST","GET", "DELETE"
           ],
           "root": "upload",
-          "index": "me.html",
+          "index": "me.py",
           "dirList": true,
           "cgi": {
             "py": "python3"
