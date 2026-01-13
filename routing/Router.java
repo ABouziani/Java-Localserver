@@ -8,8 +8,13 @@ import parsing.MultipartForm;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import static java.nio.ByteBuffer.wrap;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import session.Session;
 
 ;
@@ -49,7 +54,7 @@ public class Router {
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
-       
+
         Path target = fsroot.resolve(rel).normalize();
         if (!target.startsWith(fsroot)) {
             return HTTPResponse.error(403, cfg);
@@ -77,17 +82,19 @@ public class Router {
                     if (matched.redirect != null) {
                         return HTTPResponse.redirect(matched.redirect);
                     }
-                    return HTTPResponse.error(500, cfg);
-                }
-                if (!f.exists())
                     return HTTPResponse.error(404, cfg);
+                }
+                if (!f.exists()) {
+                    return HTTPResponse.error(404, cfg);
+                }
                 return HTTPResponse.serveFile(f, true);
             case "DELETE":
                 if (f.isDirectory()) {
                     return HTTPResponse.error(403, cfg);
                 }
-                if (!f.exists())
+                if (!f.exists()) {
                     return HTTPResponse.error(404, cfg);
+                }
                 if (f.delete()) {
                     return HTTPResponse.simple(200, "Deleted");
                 }
@@ -96,10 +103,24 @@ public class Router {
                 }
                 return HTTPResponse.error(500, cfg);
             case "POST":
-                // Check if chunked transfer encoding first
-                HTTPResponse resp = MultipartForm.parseBody(req, cfg, matched);
-                if (resp != null) {
-                    return resp;
+                String ct = req.headers.getOrDefault("content-type", "");
+                // System.out.println(ct);
+                if (ct.startsWith("multipart/form-data")) {
+                    HTTPResponse resp = MultipartForm.parseBody(req, cfg, matched);
+                    if (resp != null) {
+                        return resp;
+                    }
+                } else {
+                    if (req.tempFilePath != null && Files.size(req.tempFilePath) != 0) {
+
+                        byte[] fileBuf = new byte[(int) Files.size(req.tempFilePath)];
+                        try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
+                            fc.read(wrap(fileBuf), 0);
+                        }
+                        return HTTPResponse.simple(200, new String(fileBuf));
+                    } else {
+                        return HTTPResponse.simple(200, "");
+                    }
                 }
                 return HTTPResponse.simple(200, "OK");
             default:

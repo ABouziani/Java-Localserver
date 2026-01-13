@@ -363,7 +363,7 @@ public class MultipartForm {
             }
 
             String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
-            Path out = Path.of("upload", safeName).toAbsolutePath();
+            Path out = Path.of("upload", safeName+"_"+System.currentTimeMillis()).toAbsolutePath();
             Files.createDirectories(out.getParent());
             return ChunkedDecoder.saveChunked(req, cfg, out);
         }
@@ -418,7 +418,7 @@ public class MultipartForm {
 
         // 4. Save body: [headerEnd, headerEnd + bodySize)
         String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
-        Path out = Path.of("upload", safeName).toAbsolutePath();
+        Path out = Path.of("upload", safeName + "_" + System.currentTimeMillis()).toAbsolutePath();
         Files.createDirectories(out.getParent());
         try (var src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
                 FileChannel dest = FileChannel.open(out,

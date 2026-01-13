@@ -71,7 +71,7 @@ public class MainServer {
             clientChannel.configureBlocking(false);
             clientChannel.socket().setTcpNoDelay(true);
             int port = ((InetSocketAddress) serverChannel.getLocalAddress()).getPort();
-            ClientState state = new ClientState(clientChannel,port);
+            ClientState state = new ClientState(clientChannel, port);
             state.lastActive = System.currentTimeMillis();
             clients.put(clientChannel, state);
 
@@ -97,7 +97,6 @@ public class MainServer {
             }
 
             if (bytesRead == 0) {
-                closeClient(channel);
                 return;
             }
 
@@ -125,17 +124,13 @@ public class MainServer {
                             }
 
                             if (server == null) {
-                                System.err.println("Warning: No server found for host: " + host);
-                                sendErrorResponse(channel, state, 404,
-                                        "<html><body><h1>404 Not Found</h1></body></html>");
+                                System.err.println("[WARNING]: No server found for host: " + host);
+                                closeClient(channel);
                                 return;
                             }
-                            if (!server.getIsDefault() && !server.getPorts().contains(state.portActive)){
-                                System.err.println("Warning: The requested port " + state.portActive + " is not in the server's configured ports.");
-                                sendErrorResponse(channel, state, 400,
-                                    "<html><body><h1>400 Bad Request</h1>" +
-                                    "<p>Invalid port: " + state.portActive + "</p>" +
-                                    "</body></html>");
+                            if (!server.getIsDefault() && !server.getPorts().contains(state.portActive)) {
+                                System.err.println("[WARNING]: No server found for host: " + host);
+                                closeClient(channel);
                                 return;
                             }
                             // Dispatch to server — handler can read req.tempFilePath
@@ -179,17 +174,13 @@ public class MainServer {
                 String host = req.headers.get("host");
                 server = serverManager.getServer(host);
                 if (server == null) {
-                    System.err.println("Warning: No server found for host: " + host);
-                    sendErrorResponse(channel, state, 404,
-                            "<html><body><h1>404 Not Found</h1></body></html>");
+                    System.err.println("[WARNING]: No server found for host: " + host);
+                    closeClient(channel);
                     return;
                 }
-                if (!server.getIsDefault() && !server.getPorts().contains(state.portActive)){
-                    System.err.println("Warning: The requested port " + state.portActive + " is not in the server's configured ports.");
-                    sendErrorResponse(channel, state, 400,
-                        "<html><body><h1>400 Bad Request</h1>" +
-                        "<p>Invalid port: " + state.portActive + "</p>" +
-                        "</body></html>");
+                if (!server.getIsDefault() && !server.getPorts().contains(state.portActive)) {
+                    System.err.println("[WARNING]: No server found for host: " + host);
+                    closeClient(channel);
                     return;
                 }
                 state.setListenAddress(host);
@@ -261,7 +252,7 @@ public class MainServer {
             if (e instanceof java.net.SocketException && e.getMessage().contains("Connection reset")) {
                 // expected under stress, ignore or log minimally
                 System.out.println("Client closed connection prematurely (expected under stress).");
-            } 
+            }
             closeClient(channel);
         }
     }
@@ -317,6 +308,11 @@ public class MainServer {
 
             String listenAddress = state.getListenAddress();
             VirtualServer server = serverManager.getServer(listenAddress);
+            if (server == null) {
+                System.out.println("[WARNING] No server found for the requested host!");
+                closeClient(channel);
+                return;
+            }
             server.write(channel, state);
             if (state != null && state.closeAfterWrite) {
                 key.cancel();
@@ -327,7 +323,7 @@ public class MainServer {
             if (e instanceof java.net.SocketException && e.getMessage().contains("Connection reset")) {
                 // expected under stress, ignore or log minimally
                 System.out.println("Client closed connection prematurely (expected under stress).");
-            } 
+            }
             closeClient(channel);
         }
     }
@@ -335,7 +331,7 @@ public class MainServer {
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
         ClientState st = clients.get(sc);
         if (st == null) {
-            closeClient(sc);
+            // closeClient(sc);
             return;
         }
         st.pending.add(resp);
@@ -347,17 +343,17 @@ public class MainServer {
         //sc.register(selector, SelectionKey.OP_WRITE);
     }
 
-    public void xcloseClient(SocketChannel sc) throws IOException {
-        clients.remove(sc);
-        sc.close();
-    }
+    // public void xcloseClient(SocketChannel sc) throws IOException {
+    //     clients.remove(sc);
+    //     sc.close();
+    // }
 
     public void closeClient(SocketChannel sc) {
         try {
             if (sc == null) {
                 clients.remove(sc);
                 return;
-            } 
+            }
             SelectionKey key = sc.keyFor(selector);
             if (key != null) {
                 key.cancel();

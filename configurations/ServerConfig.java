@@ -10,7 +10,7 @@ import routing.Route;
 public class ServerConfig {
     private String host = "";
     private List<Integer> ports = new ArrayList<>();
-    private int clientMaxBody = 10 * 1024 * 1024;
+    private long clientMaxBody = 10 * 1024 * 1024;
     private String root = "";
     private Map<String, String> errorPages = new HashMap<>();
     private Map<String, Route> routes = new HashMap<>();
@@ -151,7 +151,7 @@ public class ServerConfig {
                 return null;
             }
 
-            int size = ((Number) bodyObj).intValue();
+            long size = ((Number) bodyObj).longValue();
 
             // CHECK: invalid size
             if (size <= 0) {
@@ -159,11 +159,6 @@ public class ServerConfig {
                 return null;
             }
 
-            // CHECK: max allowed size (10MB)
-            if (size > 100 * 1024 * 1024) {
-                System.err.println("[ERROR] clientMaxBody exceeds 100MB");
-                return null;
-            }
 
             this.clientMaxBody = size;
         }
@@ -268,7 +263,7 @@ public class ServerConfig {
         this.ports = ports;
     }
 
-    public int getClientMaxBody() {
+    public long getClientMaxBody() {
         return clientMaxBody;
     }
 

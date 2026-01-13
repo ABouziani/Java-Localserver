@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class ServerManager {
+
     private final List<VirtualServer> virtualServers = new ArrayList<>();
     private final Map<String, VirtualServer> addressToServer = new HashMap<>();
     private VirtualServer defaultServer;
@@ -36,6 +37,7 @@ public class ServerManager {
     public void bindAllListeners(Selector selector) throws IOException {
         Set<String> boundAddresses = new HashSet<>();
         Set<Integer> portscreated = new HashSet<>();
+        String printports = "";
         for (VirtualServer server : virtualServers) {
             String key = server.getHost();
             addressToServer.put(key, server);
@@ -50,14 +52,16 @@ public class ServerManager {
                         serverChannel.bind(new InetSocketAddress(port), 1024);
                         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
                         portscreated.add(port);
+                        printports += port + " ";
                     }
                 }
             } else {
                 // host must be unique
-                System.err.println("[Error] Server: Duplicate host address" +
-                                        key + "- each host must be unique to one server");
+                System.err.println("[Error] Server: Duplicate host address"
+                        + key + "- each host must be unique to one server");
             }
         }
+        System.out.println("Main Server Listening on: " + printports);
         if (portscreated.size() == 0) {
             System.out.println("Error: No valid port binded, check your config!");
             System.exit(1);

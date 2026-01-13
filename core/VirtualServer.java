@@ -30,7 +30,7 @@ public class VirtualServer {
     private final SessionManager sessionManager;
 
     private final List<Integer> ports;
-    private final int clientMaxBody;
+    private final long clientMaxBody;
     private final String root;
     private final Map<String, String> errorPages;
     private final Map<String, Route> routes;
@@ -75,56 +75,56 @@ public class VirtualServer {
         }
     }
 
-    public void wwrite(SocketChannel sc, ClientState state) throws IOException {
+    // public void wwrite(SocketChannel sc, ClientState state) throws IOException {
 
-        if (state.pending.isEmpty()) {
-            return;
-        }
-        HTTPResponse resp = state.pending.peek();
-        if (!resp.sentHeader) {
-            byte[] h = resp.toHeaderBytes();
-            state.writeBuf = ByteBuffer.wrap(h);
-            resp.sentHeader = true;
-        }
-        if (state.writeBuf != null && state.writeBuf.hasRemaining()) {
-            sc.write(state.writeBuf);
-            if (state.writeBuf.hasRemaining()) {
-                return; // partial
-            }
-            state.writeBuf = null;
-        }
-        if (!resp.streamed) {
-            if (resp.body != null) {
-                state.writeBuf = ByteBuffer.wrap(resp.body.getBytes(StandardCharsets.UTF_8));
-                sc.write(state.writeBuf);
-                if (state.writeBuf.hasRemaining()) {
-                    return; // partial
+    //     if (state.pending.isEmpty()) {
+    //         return;
+    //     }
+    //     HTTPResponse resp = state.pending.peek();
+    //     if (!resp.sentHeader) {
+    //         byte[] h = resp.toHeaderBytes();
+    //         state.writeBuf = ByteBuffer.wrap(h);
+    //         resp.sentHeader = true;
+    //     }
+    //     if (state.writeBuf != null && state.writeBuf.hasRemaining()) {
+    //         sc.write(state.writeBuf);
+    //         if (state.writeBuf.hasRemaining()) {
+    //             return; // partial
+    //         }
+    //         state.writeBuf = null;
+    //     }
+    //     if (!resp.streamed) {
+    //         if (resp.body != null) {
+    //             state.writeBuf = ByteBuffer.wrap(resp.body.getBytes(StandardCharsets.UTF_8));
+    //             sc.write(state.writeBuf);
+    //             if (state.writeBuf.hasRemaining()) {
+    //                 return; // partial
 
-                }
-                state.writeBuf = null;
-            }
-            state.pending.poll();
-            mainServer.closeClient(sc);
-        } else {
-            // streamed body (file)
-            if (resp.fileChannel == null) {
-                resp.fileChannel = FileChannel.open(resp.file.toPath(), StandardOpenOption.READ);
-                resp.filePos = 0;
-            }
-            //System.out.println(resp.file.toPath());
-            long transferred = resp.fileChannel.transferTo(resp.filePos, 8192, sc);
-            resp.filePos += transferred;
-            if (resp.filePos >= resp.file.length()) {
-                resp.fileChannel.close();
-                state.pending.poll();
-                if (!resp.keepAlive) {
-                    mainServer.closeClient(sc);
-                    return;
-                }
-            }
-        }
+    //             }
+    //             state.writeBuf = null;
+    //         }
+    //         state.pending.poll();
+    //         mainServer.closeClient(sc);
+    //     } else {
+    //         // streamed body (file)
+    //         if (resp.fileChannel == null) {
+    //             resp.fileChannel = FileChannel.open(resp.file.toPath(), StandardOpenOption.READ);
+    //             resp.filePos = 0;
+    //         }
+    //         //System.out.println(resp.file.toPath());
+    //         long transferred = resp.fileChannel.transferTo(resp.filePos, 8192, sc);
+    //         resp.filePos += transferred;
+    //         if (resp.filePos >= resp.file.length()) {
+    //             resp.fileChannel.close();
+    //             state.pending.poll();
+    //             if (!resp.keepAlive) {
+    //                 mainServer.closeClient(sc);
+    //                 return;
+    //             }
+    //         }
+    //     }
 
-    }
+    // }
 
     public void write(SocketChannel sc, ClientState state) throws IOException {
 
@@ -248,7 +248,7 @@ public class VirtualServer {
         return ports;
     }
 
-    public int getClientMaxBody() {
+    public long getClientMaxBody() {
         return clientMaxBody;
     }
 

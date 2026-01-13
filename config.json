@@ -70,7 +70,7 @@
     },
      {
       "root": "www",
-      "clientMaxBody": 1000,
+      "clientMaxBody": 1000000000000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
