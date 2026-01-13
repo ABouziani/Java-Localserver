@@ -1,3 +1,4 @@
 www/
 error_pages/
 build/
+*.bin
