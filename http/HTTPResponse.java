@@ -11,6 +11,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
+import session.Session;
 
 public class HTTPResponse {
 
@@ -89,7 +90,7 @@ public class HTTPResponse {
         return r;
     }
 
-    public static HTTPResponse simple(int code, String text) {
+    public static HTTPResponse simple(int code,Session sess ,String text) {
         HTTPResponse r = new HTTPResponse();
         r.status = code;
         r.body = text;

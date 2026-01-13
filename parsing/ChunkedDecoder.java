@@ -6,6 +6,7 @@ import java.nio.file.*;
 import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
+import session.Session;
 
 public class ChunkedDecoder {
 
@@ -21,7 +22,7 @@ public class ChunkedDecoder {
         }
     }
 
-    public static HTTPResponse saveChunked(HTTPRequest req, ServerConfig cfg, Path out) {
+    public static HTTPResponse saveChunked(HTTPRequest req, ServerConfig cfg, Path out, Session sess) {
 
         Path chunkedFile = null;
         Path outputFile = out;
@@ -157,7 +158,7 @@ public class ChunkedDecoder {
                 }
 
                 bos.flush();
-                return HTTPResponse.simple(200, "OK");
+                return HTTPResponse.simple(200,sess, "OK");
             }
         } catch (PayloadTooLargeException e) {
             cleanupFiles(outputFile, chunkedFile);

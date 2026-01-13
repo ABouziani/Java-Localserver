@@ -225,12 +225,13 @@ public class VirtualServer {
     private void handleRequest(SocketChannel sc, HTTPRequest req, ClientState state) throws IOException {
 
         // sessions
-        String sid = Cookie.getCookie(req.headers.getOrDefault("Cookie", ""), "SID");
+        String sid = Cookie.getCookie(req.headers.getOrDefault("cookie", ""), "SID");
         Session sess = null;
         if (sid != null) {
             sess = sessionManager.get(sid);
         }
-        if ((req.method.equals("DELETE")) && sid == null){
+        if ((req.method.equalsIgnoreCase("DELETE")) && sess == null){
+            
             mainServer.enqueueResponse(sc,HTTPResponse.error(403, config));
             return;
         }
@@ -240,7 +241,7 @@ public class VirtualServer {
 
         HTTPResponse resp = router.route(req, sess, cgiHandler);
         // set session cookie
-        resp.headers.put("Set-Cookie", "SID=" + sid + "; Path=/; HttpOnly");
+        resp.headers.put("Set-Cookie", "SID=" + sess.id + "; Path=/; HttpOnly");
         mainServer.enqueueResponse(sc, resp);
     }
 

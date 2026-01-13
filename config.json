@@ -83,7 +83,7 @@
             "GET","POST","DELETE"
           ],
           "root": "www",
-          "index": "indexx.html",
+          "index": "index.html",
           "dirList": false,
           "cgi": {
             "py": "python3"
@@ -91,7 +91,7 @@
         },
         "/upload": {
           "methods": [
-            "POST","GET"
+            "POST","GET", "DELETE"
           ],
           "root": "upload",
           "index": "me.html",

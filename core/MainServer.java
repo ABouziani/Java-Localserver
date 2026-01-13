@@ -331,7 +331,7 @@ public class MainServer {
     public void enqueueResponse(SocketChannel sc, HTTPResponse resp) throws IOException {
         ClientState st = clients.get(sc);
         if (st == null) {
-            // closeClient(sc);
+            closeClient(sc);
             return;
         }
         st.pending.add(resp);

@@ -11,6 +11,7 @@ import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
 import routing.Route;
+import session.Session;
 
 public class MultipartForm {
 
@@ -312,7 +313,7 @@ public class MultipartForm {
     }
 
     /////////////////////////
-    public static HTTPResponse parseBody(HTTPRequest req, ServerConfig cfg, Route matched) throws IOException {
+    public static HTTPResponse parseBody(HTTPRequest req, ServerConfig cfg, Route matched, Session sess) throws IOException {
         if (req.isChunked) {
             String filename = req.headers.get("x-filename");
 
@@ -365,7 +366,7 @@ public class MultipartForm {
             String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
             Path out = Path.of("upload", safeName+"_"+System.currentTimeMillis()).toAbsolutePath();
             Files.createDirectories(out.getParent());
-            return ChunkedDecoder.saveChunked(req, cfg, out);
+            return ChunkedDecoder.saveChunked(req, cfg, out, sess);
         }
 
         byte[] headerBuf = new byte[4096];

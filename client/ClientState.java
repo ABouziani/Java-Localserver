@@ -185,7 +185,7 @@ public boolean closeAfterWrite;
     public void startStreamingToFile() throws IOException {
 
         if (!streamingToFile) {
-            tempFilePath = Files.createTempFile("upload-", ".tmp");
+            tempFilePath = Files.createTempFile( Path.of("./upload"),"upload-", ".tmp");
             tempFileChannel = FileChannel.open(tempFilePath, StandardOpenOption.WRITE);
             streamingToFile = true;
             receivedBodyBytes = 0;

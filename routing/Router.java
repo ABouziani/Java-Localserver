@@ -54,8 +54,11 @@ public class Router {
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
-
+        if (rel.startsWith("/")) {
+            rel = rel.substring(1);
+        }
         Path target = fsroot.resolve(rel).normalize();
+        System.out.println(target + fsroot.toString());
         if (!target.startsWith(fsroot)) {
             return HTTPResponse.error(403, cfg);
         }
@@ -96,7 +99,7 @@ public class Router {
                     return HTTPResponse.error(404, cfg);
                 }
                 if (f.delete()) {
-                    return HTTPResponse.simple(200, "Deleted");
+                    return HTTPResponse.simple(200, sess, "Deleted");
                 }
                 if (matched.redirect != null) {
                     return HTTPResponse.redirect(matched.redirect);
@@ -106,7 +109,7 @@ public class Router {
                 String ct = req.headers.getOrDefault("content-type", "");
                 // System.out.println(ct);
                 if (ct.startsWith("multipart/form-data")) {
-                    HTTPResponse resp = MultipartForm.parseBody(req, cfg, matched);
+                    HTTPResponse resp = MultipartForm.parseBody(req, cfg, matched, sess);
                     if (resp != null) {
                         return resp;
                     }
@@ -117,12 +120,12 @@ public class Router {
                         try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
                             fc.read(wrap(fileBuf), 0);
                         }
-                        return HTTPResponse.simple(200, new String(fileBuf));
+                        return HTTPResponse.simple(200, sess, new String(fileBuf));
                     } else {
-                        return HTTPResponse.simple(200, "");
+                        return HTTPResponse.simple(200, sess, "");
                     }
                 }
-                return HTTPResponse.simple(200, "OK");
+                return HTTPResponse.simple(200, sess, "OK");
             default:
                 return HTTPResponse.error(405, cfg);
         }
