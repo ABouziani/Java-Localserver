@@ -313,10 +313,13 @@ public class MultipartForm {
     }
 
     /////////////////////////
-    public static HTTPResponse parseBody(HTTPRequest req, ServerConfig cfg, Route matched, Session sess) throws IOException {
+    public static HTTPResponse parseBody(HTTPRequest req, ServerConfig cfg, Route matched, Session sess)
+            throws IOException {
         if (req.isChunked) {
             String filename = req.headers.get("x-filename");
-
+            System.out.println("+++++++++++++++");
+            System.out.println(filename);
+            int dataStart = 0;
             if (filename == null || filename.isEmpty()) {
                 if (req.tempFilePath != null && Files.exists(req.tempFilePath)) {
                     try {
@@ -335,7 +338,7 @@ public class MultipartForm {
                         }
 
                         if (firstCRLF > 0) {
-                            int dataStart = firstCRLF + 2;
+                            dataStart = firstCRLF + 2;
 
                             // Search for Content-Disposition in the next chunk data
                             int searchLimit = Math.min(readLen, dataStart + 2048);
@@ -364,9 +367,9 @@ public class MultipartForm {
             }
 
             String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
-            Path out = Path.of("upload", safeName+"_"+System.currentTimeMillis()).toAbsolutePath();
+            Path out = Path.of("upload", System.currentTimeMillis() + "_" + safeName).toAbsolutePath();
             Files.createDirectories(out.getParent());
-            return ChunkedDecoder.saveChunked(req, cfg, out, sess);
+            return ChunkedDecoder.saveChunked(req, cfg, out, sess, dataStart);
         }
 
         byte[] headerBuf = new byte[4096];
@@ -419,7 +422,7 @@ public class MultipartForm {
 
         // 4. Save body: [headerEnd, headerEnd + bodySize)
         String safeName = filename.replaceAll("[^a-zA-Z0-9.\\-_ ]", "_").replaceAll("\\s+", "_");
-        Path out = Path.of("upload", safeName + "_" + System.currentTimeMillis()).toAbsolutePath();
+        Path out = Path.of("upload", System.currentTimeMillis() + "_" + safeName).toAbsolutePath();
         Files.createDirectories(out.getParent());
         try (var src = FileChannel.open(req.tempFilePath, StandardOpenOption.READ);
                 FileChannel dest = FileChannel.open(out,

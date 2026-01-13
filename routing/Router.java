@@ -108,7 +108,7 @@ public class Router {
             case "POST":
                 String ct = req.headers.getOrDefault("content-type", "");
                 // System.out.println(ct);
-                if (ct.startsWith("multipart/form-data")) {
+                if (ct.startsWith("multipart/form-data") || req.isChunked) {
                     HTTPResponse resp = MultipartForm.parseBody(req, cfg, matched, sess);
                     if (resp != null) {
                         return resp;

@@ -22,7 +22,7 @@ public class ChunkedDecoder {
         }
     }
 
-    public static HTTPResponse saveChunked(HTTPRequest req, ServerConfig cfg, Path out, Session sess) {
+    public static HTTPResponse saveChunked(HTTPRequest req, ServerConfig cfg, Path out, Session sess, int startFrom) {
 
         Path chunkedFile = null;
         Path outputFile = out;
@@ -37,15 +37,16 @@ public class ChunkedDecoder {
             Files.createDirectories(outputFile.getParent());
 
             long maxSize = cfg.getClientMaxBody();
-
+            boolean foundLastChunk = false;
+            long totalWritten = 0;
+            boolean headersSkipped = false;
             try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(chunkedFile));
-                    BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile))) {
+                    BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile));
+                    ByteArrayOutputStream decodedChunks = new ByteArrayOutputStream()) {
 
-                boolean foundLastChunk = false;
-                long totalWritten = 0;
-                boolean headersSkipped = false;
-                //5;ssss/r/n
+                int dataStart = 0;
                 while (true) {
+
                     String line = readLine(bis);
                     if (line == null) {
                         if (!foundLastChunk) {
@@ -53,6 +54,7 @@ public class ChunkedDecoder {
                         }
                         break;
                     }
+
                     line = line.trim();
                     if (line.isEmpty())
                         continue;
@@ -61,6 +63,7 @@ public class ChunkedDecoder {
                     if (semicolonIndex != -1) {
                         line = line.substring(0, semicolonIndex).trim();
                     }
+
                     if (line.isEmpty()) {
                         throw new InvalidChunkException("Empty chunk size line");
                     }
@@ -75,10 +78,13 @@ public class ChunkedDecoder {
                     if (chunkSize < 0) {
                         throw new InvalidChunkException("Negative chunk size not allowed");
                     }
+
                     if (chunkSize == 0) {
                         foundLastChunk = true;
+
                         int cr = bis.read();
                         int lf = bis.read();
+
                         if (cr == '\r' && lf == '\n') {
                             break;
                         } else if (cr == '\n') {
@@ -107,34 +113,10 @@ public class ChunkedDecoder {
                                     "Unexpected EOF while reading chunk data (expected " + remaining + " more bytes)");
                         }
 
-                        if (!headersSkipped) {
-                            int writeStart = 0;
-                            // Search for \r\n\r\n in this buffer
-                            for (int i = 0; i < read - 3; i++) {
-                                if (buffer[i] == '\r' && buffer[i + 1] == '\n'
-                                        && buffer[i + 2] == '\r' && buffer[i + 3] == '\n') {
-                                    writeStart = i + 4;
-                                    headersSkipped = true;
-                                    break;
-                                }
-                            }
-
-                            // Write only data after headers (or all if no headers found yet)
-                            if (headersSkipped) {
-                                bos.write(buffer, writeStart, read - writeStart);
-                                totalWritten += (read - writeStart);
-                            } else if (chunkSize <= 8192) {
-                                headersSkipped = true;
-                                bos.write(buffer, 0, read);
-                                totalWritten += read;
-                            }
-                        } else {
-                           
-                            bos.write(buffer, 0, read);
-                            totalWritten += read;
-                        }
-
+                        bos.write(buffer, 0, read);
+                        bos.flush();
                         remaining -= read;
+                        totalWritten += read;
                     }
 
                     int cr = bis.read();
@@ -143,7 +125,7 @@ public class ChunkedDecoder {
                     if (cr == -1 || lf == -1) {
                         throw new InvalidChunkException("Unexpected EOF after chunk data");
                     }
-               
+
                     if (cr != '\r' || lf != '\n') {
                         if (cr == '\n') {
                             continue;
@@ -156,9 +138,11 @@ public class ChunkedDecoder {
                 if (!foundLastChunk) {
                     throw new InvalidChunkException("Missing terminating chunk (0\\r\\n\\r\\n)");
                 }
+                // Write only the actual file data (skip multipart headers)
 
-                bos.flush();
-                return HTTPResponse.simple(200,sess, "OK");
+                System.out.println("Body saved to: " + outputFile);
+                return HTTPResponse.simple(200, sess, "OK");
+
             }
         } catch (PayloadTooLargeException e) {
             cleanupFiles(outputFile, chunkedFile);
@@ -188,7 +172,7 @@ public class ChunkedDecoder {
         int b;
         int bytesRead = 0;
         int maxLineLength = 1024;
-
+         //20;qiudhuqyd
         while ((b = is.read()) != -1) {
             if (++bytesRead > maxLineLength) {
                 throw new IOException("Chunk size line exceeds maximum length");
