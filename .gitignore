@@ -1,3 +1,2 @@
 build/
-www/
-error_pages/
+*.bin
