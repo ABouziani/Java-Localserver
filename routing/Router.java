@@ -43,6 +43,7 @@ public class Router {
                 matchedPath = p;
             }
         }
+
         if (matched == null) {
             return HTTPResponse.errorWithBody(404, "Path not found", cfg);
         }
@@ -62,6 +63,10 @@ public class Router {
             return HTTPResponse.error(403, cfg);
         }
         File f = target.toFile();
+
+        if (!f.exists()) {
+            return HTTPResponse.errorWithBody(404, "File not found!", cfg);
+        }
 
         // CGI handling by extension
         String ext = getExt(f.getName());
@@ -112,7 +117,7 @@ public class Router {
                     if (resp != null) {
                         return resp;
                     }
-                    
+
                 } else {
                     if (req.tempFilePath != null && Files.size(req.tempFilePath) != 0) {
 

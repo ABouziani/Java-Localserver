@@ -5,7 +5,7 @@
   },
   "servers": [
     {
-      "host": "test.com",
+      "host": "testcom",
       "ports": [8080,8989],
       "root": "www",
       "clientMaxBody": 100000,

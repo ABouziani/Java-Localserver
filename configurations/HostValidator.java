@@ -1,73 +1,143 @@
 package configurations;
 
-import java.util.regex.Pattern;
-
 public final class HostValidator {
 
-    // RFC-compliant (practical) patterns
-    private static final Pattern DOMAIN =
-            Pattern.compile("^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$");
-
-    private static final Pattern IPV4 =
-            Pattern.compile("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.)){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$");
-
-    private static final Pattern IPV6 =
-            Pattern.compile("^\\[[0-9a-fA-F:]+\\]$");
-
-    private static final Pattern PORT =
-            Pattern.compile("^:[0-9]{1,5}$");
-
+    private HostValidator() {}
 
     public static boolean isValidHostHeader(String host) {
         if (host == null || host.isEmpty()) {
             return false;
         }
 
-        // No spaces, no scheme, no path
-        if (host.contains(" ") || host.contains("/") || host.contains("://")) {
+        // Reject spaces or path characters
+        if (containsInvalidChars(host)) {
             return false;
         }
 
         String hostname;
-        String port = null;
+        String portPart = null;
 
-        // IPv6 case: [addr]:port?
-        if (host.startsWith("[")) {
-            int end = host.indexOf(']');
-            if (end == -1) return false;
+        // IPv6: [::1]:8080
+        if (host.charAt(0) == '[') {
+            int close = host.indexOf(']');
+            if (close == -1) return false;
 
-            hostname = host.substring(0, end + 1);
-            if (!IPV6.matcher(hostname).matches()) {
-                return false;
+            hostname = host.substring(1, close);
+
+            if (close + 1 < host.length()) {
+                if (host.charAt(close + 1) != ':') return false;
+                portPart = host.substring(close + 2);
             }
 
-            if (host.length() > end + 1) {
-                port = host.substring(end + 1);
-            }
+            if (!isValidIPv6(hostname)) return false;
         } else {
             int colon = host.indexOf(':');
-            if (colon >= 0) {
+            if (colon != -1) {
                 hostname = host.substring(0, colon);
-                port = host.substring(colon);
+                portPart = host.substring(colon + 1);
             } else {
                 hostname = host;
             }
 
-            if (!DOMAIN.matcher(hostname).matches()
-                    && !IPV4.matcher(hostname).matches()) {
+            if (!isValidHostnameOrIPv4(hostname)) {
                 return false;
             }
         }
 
         // Validate port if present
-        if (port != null) {
-            if (!PORT.matcher(port).matches()) return false;
+        if (portPart != null && !isValidPort(portPart)) {
+            return false;
+        }
 
-            int p = Integer.parseInt(port.substring(1));
-            if (p < 1 || p > 65535) return false;
+        return true;
+    }
+
+    private static boolean containsInvalidChars(String host) {
+        for (int i = 0; i < host.length(); i++) {
+            char c = host.charAt(i);
+            if (c == ' ' || c == '/' || c == '\\') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isValidPort(String port) {
+        if (port.isEmpty()) return false;
+
+        int value = 0;
+        for (int i = 0; i < port.length(); i++) {
+            char c = port.charAt(i);
+            if (c < '0' || c > '9') return false;
+            value = value * 10 + (c - '0');
+            if (value > 65535) return false;
+        }
+
+        return value > 0;
+    }
+
+    private static boolean isValidHostnameOrIPv4(String host) {
+        if (host.isEmpty()) return false;
+
+        boolean hasLetter = false;
+
+        for (int i = 0; i < host.length(); i++) {
+            char c = host.charAt(i);
+
+            if (Character.isLetter(c)) {
+                hasLetter = true;
+            } else if (Character.isDigit(c) || c == '-' || c == '.') {
+                // allowed
+            } else {
+                return false;
+            }
+        }
+
+        // Prevent leading/trailing dot
+        if (host.charAt(0) == '.' || host.charAt(host.length() - 1) == '.') {
+            return false;
+        }
+
+        // If no letters → likely IPv4
+        if (!hasLetter) {
+            return isValidIPv4(host);
+        }
+
+        return true;
+    }
+
+    private static boolean isValidIPv4(String ip) {
+        String[] parts = ip.split("\\.", -1); // allowed here only for split
+        if (parts.length != 4) return false;
+
+        for (String part : parts) {
+            if (part.isEmpty()) return false;
+
+            int value = 0;
+            for (int i = 0; i < part.length(); i++) {
+                char c = part.charAt(i);
+                if (c < '0' || c > '9') return false;
+                value = value * 10 + (c - '0');
+            }
+
+            if (value > 255) return false;
+        }
+
+        return true;
+    }
+
+    private static boolean isValidIPv6(String ip) {
+        // Minimal IPv6 validation (project-safe)
+        if (ip.isEmpty()) return false;
+
+        for (int i = 0; i < ip.length(); i++) {
+            char c = ip.charAt(i);
+            if (Character.digit(c, 16) != -1 || c == ':') {
+                continue;
+            }
+            return false;
         }
 
         return true;
     }
 }
-
