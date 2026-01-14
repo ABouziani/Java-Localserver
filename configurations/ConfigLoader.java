@@ -20,10 +20,13 @@ public class ConfigLoader {
                     for (Object item : rawList) {
                         
                         if (item instanceof Map) {
+                            @SuppressWarnings("unchecked")
                             Map<String,Object> map = (Map<String,Object>) item; 
-                            cfgs.add(new ServerConfig().fromMap(map));
+                            ServerConfig cfg = new ServerConfig().fromMap(map);
+                            if (cfg != null) {
+                                cfgs.add(cfg);
+                            } 
                         }
-                        System.out.println("----------------");
                     }
                     return cfgs;
                 }

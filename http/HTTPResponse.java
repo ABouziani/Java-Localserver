@@ -11,13 +11,13 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
+import session.Session;
 
 public class HTTPResponse {
+
     public int status;
     public Map<String, String> headers = new HashMap<>();
-
-    public byte[] body = null;
-
+    public String body = null;
     public boolean streamed = false;
     public File file = null;
     public boolean sentHeader = false;
@@ -37,11 +37,21 @@ public class HTTPResponse {
             r.headers.put("Content-Length", String.valueOf(r.file.length()));
             r.headers.put("Content-Type", "text/html");
         } else {
-            String bodyText = "<html><body><h1>" + code + "</h1></body></html>";
-            r.body = bodyText.getBytes(StandardCharsets.UTF_8);
-            r.headers.put("Content-Length", String.valueOf(r.body.length));
+            r.body = "<html><body><h1>" + code + "</h1></body></html>";
+            r.headers.put("Content-Length", String.valueOf(r.body.length()));
             r.headers.put("Content-Type", "text/html");
         }
+        return r;
+    }
+
+    public static HTTPResponse errorWithBody(int code, String customBody, ServerConfig cfg) {
+        HTTPResponse r = new HTTPResponse();
+        r.status = code;
+        r.headers.put("Connection", "close");
+        r.keepAlive = false;
+        r.body = customBody;
+        r.headers.put("Content-Length", String.valueOf(r.body.length()));
+        r.headers.put("Content-Type", "text/html; charset=utf-8");
         return r;
     }
 
@@ -49,8 +59,8 @@ public class HTTPResponse {
         HTTPResponse r = new HTTPResponse();
         r.status = 302;
         r.headers.put("Location", to);
-        r.body = new byte[0];
         r.headers.put("Content-Length", "0");
+        r.keepAlive = false;
         return r;
     }
 
@@ -65,46 +75,28 @@ public class HTTPResponse {
         return r;
     }
 
-    public static HTTPResponse dirListing(File f) {
+    public static HTTPResponse dirListing(File f, String path) {
         StringBuilder b = new StringBuilder();
         b.append("<html><body><ul>");
         for (var x : f.listFiles()) {
-            b.append("<li><a href='").append(x.getName()).append("'>").append(x.getName()).append("</a></li>");
+            b.append("<li><a href='" + path + "/" + x.getName() + "'>" + x.getName() + "</a></li>");
         }
         b.append("</ul></body></html>");
-
         HTTPResponse r = new HTTPResponse();
-        r.body = b.toString().getBytes(StandardCharsets.UTF_8);
+        r.body = b.toString();
         r.status = 200;
-        r.headers.put("Content-Length", String.valueOf(r.body.length));
+        r.headers.put("Content-Length", String.valueOf(r.body.length()));
         r.headers.put("Content-Type", "text/html");
         return r;
     }
 
-    public static HTTPResponse simple(int code, String text) {
+    public static HTTPResponse simple(int code,Session sess ,String text) {
         HTTPResponse r = new HTTPResponse();
         r.status = code;
-        r.body = text.getBytes(StandardCharsets.UTF_8);
-        r.headers.put("Content-Length", String.valueOf(r.body.length));
+        r.body = text;
+        r.headers.put("Content-Length", String.valueOf(text.length()));
         r.headers.put("Content-Type", "text/plain");
         return r;
-    }
-
-    
-    public void setBody(String text) {
-        if (text == null) {
-            this.body = null;
-        } else {
-            this.body = text.getBytes(StandardCharsets.UTF_8);
-        }
-    }
-
-    
-    public String getBodyAsString() {
-        if (body == null) {
-            return null;
-        }
-        return new String(body, StandardCharsets.UTF_8);
     }
 
     public byte[] toHeaderBytes() {
@@ -135,20 +127,10 @@ public class HTTPResponse {
                 return "Not Found";
             case 405:
                 return "Method Not Allowed";
-            case 411:
-                return "Length Required";
             case 413:
-                return "Content Too Large";
-            case 414:
-                return "URI Too Long";
-            case 431:
-                return "Request Header Fields Too Large";
+                return "Payload Too Large";
             case 500:
                 return "Internal Server Error";
-            case 501:
-                return "Not Implemented";
-            case 505:
-                return "HTTP Version Not Supported";
             default:
                 return "";
         }
@@ -165,16 +147,6 @@ public class HTTPResponse {
             return "image/png";
         if (name.endsWith(".jpg") || name.endsWith(".jpeg"))
             return "image/jpeg";
-        if (name.endsWith(".gif"))
-            return "image/gif";
-        if (name.endsWith(".svg"))
-            return "image/svg+xml";
-        if (name.endsWith(".json"))
-            return "application/json";
-        if (name.endsWith(".xml"))
-            return "application/xml";
-        if (name.endsWith(".pdf"))
-            return "application/pdf";
         return "application/octet-stream";
     }
 }

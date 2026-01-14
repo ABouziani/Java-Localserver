@@ -1,19 +1,26 @@
 package routing;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import cgi.CGIHandler;
 import configurations.ServerConfig;
 import http.HTTPRequest;
 import http.HTTPResponse;
 import parsing.MultipartForm;
-import session.Session;;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import static java.nio.ByteBuffer.wrap;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import session.Session;
+
+;
 
 public class Router {
+
     private final ServerConfig cfg;
 
     public Router(ServerConfig cfg) {
@@ -21,9 +28,11 @@ public class Router {
     }
 
     public HTTPResponse route(HTTPRequest req, Session sess, CGIHandler cgi) throws IOException {
+
         // basic validation
-        if (!req.valid)
+        if (!req.valid) {
             return HTTPResponse.error(400, cfg);
+        }
         // find route by prefix (simple longest match)
         Route matched = null;
         String matchedPath = "";
@@ -34,35 +43,26 @@ public class Router {
                 matchedPath = p;
             }
         }
-        if (matched == null)
-            matched = new Route();
-        matched.root = cfg.getRoot();
-        // redirect
-        if (matched.redirect != null) {
-            return HTTPResponse.redirect(matched.redirect);
+        if (matched == null) {
+            return HTTPResponse.errorWithBody(404, "Path not found", cfg);
         }
+        // redirect
+
         if (!matched.methods.isEmpty() && !matched.methods.contains(req.method)) {
             return HTTPResponse.error(405, cfg);
         }
         // map path
         Path fsroot = Paths.get(matched.root != null ? matched.root : cfg.getRoot());
         String rel = req.path.substring(matchedPath.length());
-        if (rel.equals("") || rel.equals("/"))
-            rel = "/" + matched.index;
-        Path target = fsroot.resolve(rel.substring(1)).normalize();
-        if (!target.startsWith(fsroot))
-            return HTTPResponse.error(403, cfg);
-        File f = target.toFile();
-        if (f.isDirectory()) {
-            File idx = new File(f, matched.index);
-            if (idx.exists())
-                return HTTPResponse.serveFile(idx, true);
-            if (matched.dirList)
-                return HTTPResponse.dirListing(f);
+        if (rel.startsWith("/")) {
+            rel = rel.substring(1);
+        }
+        Path target = fsroot.resolve(rel).normalize();
+        if (!target.startsWith(fsroot)) {
             return HTTPResponse.error(403, cfg);
         }
-        if (!f.exists())
-            return HTTPResponse.error(404, cfg);
+        File f = target.toFile();
+
         // CGI handling by extension
         String ext = getExt(f.getName());
         if (matched.cgi.containsKey(ext) || cfg.getRoutes().values().stream().anyMatch(r -> r.cgi.containsKey(ext))) {
@@ -73,23 +73,59 @@ public class Router {
         // multipart
         switch (req.method) {
             case "GET":
+                if (f.isDirectory()) {
+                    File idx = new File(f, matched.index);
+                    if (idx.exists()) {
+                        return HTTPResponse.serveFile(idx, true);
+                    }
+                    if (matched.dirList) {
+                        return HTTPResponse.dirListing(f, rel);
+                    }
+                    if (matched.redirect != null) {
+                        return HTTPResponse.redirect(matched.redirect);
+                    }
+                    return HTTPResponse.error(404, cfg);
+                }
+                if (!f.exists()) {
+                    return HTTPResponse.error(404, cfg);
+                }
                 return HTTPResponse.serveFile(f, true);
             case "DELETE":
-                if (f.delete())
-                    return HTTPResponse.simple(200, "Deleted");
-                else
-                    return HTTPResponse.error(500, cfg);
-            case "POST": // naive upload: if body present and content-type multipart/form-data
-                String ct = req.headers.getOrDefault("Content-Type", "");
-                if (ct.startsWith("multipart/form-data")) {
-                    MultipartForm mf = MultipartForm.parse(req);
-                    for (var part : mf.files) {
-                        Path out = Paths.get(matched.root, part.filename).normalize();
-                        Files.write(out, part.data);
-                    }
-                    return HTTPResponse.simple(200, "Uploaded");
+                if (f.isDirectory()) {
+                    return HTTPResponse.error(403, cfg);
                 }
-                return HTTPResponse.simple(200, req.body != null ? req.body.toString() : "");
+                if (!f.exists()) {
+                    return HTTPResponse.error(404, cfg);
+                }
+                if (f.delete()) {
+                    return HTTPResponse.simple(200, sess, "Deleted");
+                }
+                if (matched.redirect != null) {
+                    return HTTPResponse.redirect(matched.redirect);
+                }
+                return HTTPResponse.error(500, cfg);
+            case "POST":
+                String ct = req.headers.getOrDefault("content-type", "");
+                // System.out.println(ct);
+                if (ct.startsWith("multipart/form-data") || req.isChunked) {
+                    HTTPResponse resp = MultipartForm.parseBody(req, cfg, matched, sess);
+                    if (resp != null) {
+                        return resp;
+                    }
+                    
+                } else {
+                    if (req.tempFilePath != null && Files.size(req.tempFilePath) != 0) {
+
+                        byte[] fileBuf = new byte[(int) Files.size(req.tempFilePath)];
+                        try (FileChannel fc = FileChannel.open(req.tempFilePath, StandardOpenOption.READ)) {
+                            fc.read(wrap(fileBuf), 0);
+                        }
+                        return HTTPResponse.simple(200, sess, new String(fileBuf));
+                    } else {
+                        return HTTPResponse.simple(200, sess, "");
+                    }
+                }
+                return HTTPResponse.simple(200, sess, "OK");
             default:
                 return HTTPResponse.error(405, cfg);
         }
@@ -99,4 +135,5 @@ public class Router {
         int i = n.lastIndexOf('.');
         return i == -1 ? "" : n.substring(i + 1);
     }
+
 }

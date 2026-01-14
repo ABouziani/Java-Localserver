@@ -5,25 +5,52 @@
   },
   "servers": [
     {
-      "host": "www.exampl.com",
-      "ports": [
-        8080,
-        8989
-      ],
+      "host": "test.com",
+      "ports": [8080,8989],
       "root": "www",
-      "clientMaxBody": 10485760,
+      "clientMaxBody": 100000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
       },
       "routes": {
-        "/test": {
-          "methods": [
-            "POST"
-          ],
+        "/": {
+          "methods": ["GET"],
           "root": "www",
           "index": "index.html",
-          "dirList": true,
+          "dirList": false,
+          "cgi": {
+            "py": "python3"
+          }
+        },
+        "/me": {
+          "methods": [
+            "GET"
+          ],
+          "root": "www",
+          "index": "me.py",
+          "dirList": false,
+          "cgi": {
+            "py": "python3"
+          }
+        }
+      }
+    },
+    {
+      "host": "teswt.com",
+      "ports": [8081],
+      "root": "www",
+      "clientMaxBody": 100000,
+      "errorPages": {
+        "404": "error_pages/404.html",
+        "500": "error_pages/500.html"
+      },
+      "routes": {
+        "/": {
+          "methods": ["GET"],
+          "root": "www",
+          "index": "index.html",
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }
@@ -34,48 +61,41 @@
           ],
           "root": "www",
           "index": "err.html",
-          "dirList": true,
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }
         }
       }
     },
-    {
-      "host": "www.example.com",
-      "ports": [
-        8080,
-        8985
-      ],
+     {
       "root": "www",
-      "clientMaxBody": 10485760,
+      "clientMaxBody": 100000000,
       "errorPages": {
         "404": "error_pages/404.html",
         "500": "error_pages/500.html"
       },
-      "default": true,
+      "default": true
+      ,
       "routes": {
-        "/tt": {
+        "/": {
           "methods": [
-            "GET",
-            "POST"
+            "GET","POST","DELETE"
           ],
           "root": "www",
           "index": "index.html",
-          "dirList": true,
-          "authenticate": true,
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }
         },
-        "/me": {
+        "/upload": {
           "methods": [
-            "GET"
+            "POST","GET", "DELETE"
           ],
-          "createSession": true,
-          "root": "www",
-          "index": "me.html",
-          "dirList": true,
+          "root": "upload",
+          "index": "me.py",
+          "dirList": false,
           "cgi": {
             "py": "python3"
           }
@@ -83,4 +103,4 @@
       }
     }
   ]
-}
+} 
