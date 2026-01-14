@@ -192,7 +192,7 @@ public class ConfigParser {
                 }
                 return Long.parseLong(token);
             } catch (NumberFormatException e) {
-                throw error("Invalid number format: " + token, e);
+                return -1;
             }
         }
     }

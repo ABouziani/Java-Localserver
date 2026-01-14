@@ -39,12 +39,9 @@ public class ChunkedDecoder {
             long maxSize = cfg.getClientMaxBody();
             boolean foundLastChunk = false;
             long totalWritten = 0;
-            boolean headersSkipped = false;
             try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(chunkedFile));
-                    BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile));
-                    ByteArrayOutputStream decodedChunks = new ByteArrayOutputStream()) {
+                    BufferedOutputStream bos = new BufferedOutputStream(Files.newOutputStream(outputFile))){
 
-                int dataStart = 0;
                 while (true) {
 
                     String line = readLine(bis);

@@ -8,6 +8,7 @@ import java.util.Map;
 import routing.Route;
 
 public class ServerConfig {
+
     private String host = "";
     private List<Integer> ports = new ArrayList<>();
     private long clientMaxBody = 10 * 1024 * 1024;
@@ -18,17 +19,13 @@ public class ServerConfig {
 
     public ServerConfig fromMap(Map<?, ?> m) {
 
-        // ===============================
         // CHECK: config map is null or empty
-        // ===============================
         if (m == null || m.isEmpty()) {
             System.err.println("[ERROR] Server config is empty or null");
             return null;
         }
 
-        // ===============================
         // CHECK: default server flag
-        // ===============================
         if (m.containsKey("default")) {
             Object defaultObj = m.get("default");
             if (defaultObj instanceof Boolean) {
@@ -39,9 +36,7 @@ public class ServerConfig {
             }
         }
 
-        // ===============================
         // CHECK: ports
-        // ===============================
         if (this.isdefault && m.containsKey("ports")) {
             System.err.println("[WARNING] Default server should not define ports");
         } else if (m.containsKey("ports")) {
@@ -70,7 +65,7 @@ public class ServerConfig {
 
                 // CHECK: valid port range
                 if (port < 1 || port > 65535) {
-                    System.err.println("[ERROR] Port out of range: " + port);
+                    System.err.println("[ERROR] Port must be in: [2:65534], server ignored!");
                     return null;
                 }
 
@@ -90,9 +85,7 @@ public class ServerConfig {
             return null;
         }
 
-        // ===============================
         // CHECK: host
-        // ===============================
         if (this.isdefault && m.containsKey("host")) {
             System.out.println("[WARNING] Default server should not define host");
         } else if (m.containsKey("host")) {
@@ -110,7 +103,7 @@ public class ServerConfig {
                 System.err.println("[ERROR] host is not valid");
                 return null;
             }
-            
+
             this.host = h;
 
         } else if (!this.isdefault) {
@@ -118,9 +111,7 @@ public class ServerConfig {
             return null;
         }
 
-        // ===============================
         // CHECK: root
-        // ===============================
         if (m.containsKey("root")) {
             Object rootObj = m.get("root");
 
@@ -138,11 +129,12 @@ public class ServerConfig {
             }
 
             this.root = r;
+        } else {
+            System.err.println("[ERROR] Some servers are with no root!");
+            return null;
         }
 
-        // ===============================
         // CHECK: clientMaxBody
-        // ===============================
         if (m.containsKey("clientMaxBody")) {
             Object bodyObj = m.get("clientMaxBody");
 
@@ -155,17 +147,14 @@ public class ServerConfig {
 
             // CHECK: invalid size
             if (size <= 0) {
-                System.err.println("[ERROR] clientMaxBody must be > 0");
+                System.err.println("[ERROR] clientMaxBody must be valid, check your config!");
                 return null;
             }
-
 
             this.clientMaxBody = size;
         }
 
-        // ===============================
         // CHECK: error pages
-        // ===============================
         if (m.containsKey("errorPages")) {
             Object epObj = m.get("errorPages");
 
@@ -194,9 +183,7 @@ public class ServerConfig {
             }
         }
 
-        // ===============================
         // CHECK: routes
-        // ===============================
         if (m.containsKey("routes")) {
             Object routesObj = m.get("routes");
 
@@ -243,10 +230,7 @@ public class ServerConfig {
         return this;
     }
 
-    // ===============================
     // Getters & Setters
-    // ===============================
-
     public String getHost() {
         return host;
     }

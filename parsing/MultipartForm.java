@@ -317,8 +317,7 @@ public class MultipartForm {
             throws IOException {
         if (req.isChunked) {
             String filename = req.headers.get("x-filename");
-            System.out.println("+++++++++++++++");
-            System.out.println(filename);
+            
             int dataStart = 0;
             if (filename == null || filename.isEmpty()) {
                 if (req.tempFilePath != null && Files.exists(req.tempFilePath)) {
@@ -486,8 +485,7 @@ public class MultipartForm {
         };
 
         // Generate filename with timestamp
-        long timestamp = System.currentTimeMillis();
-        return "upload_" + timestamp + extension;
+        return "upload" + extension;
     }
 
 }
